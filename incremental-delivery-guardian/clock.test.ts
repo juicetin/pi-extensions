@@ -242,7 +242,7 @@ test("live heartbeat state is required and retained for recovery", () => {
   }]);
 });
 
-test("persists cadence-blocking anomalies across resume", () => {
+test("persists cadence-measurement anomalies across resume", () => {
   const invalid = foldClockEvents({
     ...base,
     events: [{ ...at("observed", minute(1)), wallMs: base.wallStartedAtMs + minute(5) }],
@@ -364,9 +364,9 @@ test("measures every cadence threshold below, at, and above the boundary", () =>
   const cases = [
     ["activeTarget", "activeMs", DEFAULT_GUARDIAN_POLICY.cadence.activeTargetMs],
     ["activeReview", "activeMs", DEFAULT_GUARDIAN_POLICY.cadence.activeReviewMs],
-    ["activeHardSeal", "activeMs", DEFAULT_GUARDIAN_POLICY.cadence.activeHardSealMs],
+    ["activeEscalation", "activeMs", DEFAULT_GUARDIAN_POLICY.cadence.activeEscalationMs],
     ["wallWarning", "wallMs", DEFAULT_GUARDIAN_POLICY.cadence.wallWarningMs],
-    ["wallHardSeal", "wallMs", DEFAULT_GUARDIAN_POLICY.cadence.wallHardSealMs],
+    ["wallEscalation", "wallMs", DEFAULT_GUARDIAN_POLICY.cadence.wallEscalationMs],
   ] as const;
   const snapshot = foldClockEvents({ ...base, events: [] });
 

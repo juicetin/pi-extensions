@@ -372,9 +372,9 @@ export type CadenceMeasurement = {
   available: true;
   activeTarget: ThresholdFact;
   activeReview: ThresholdFact;
-  activeHardSeal: ThresholdFact;
+  activeEscalation: ThresholdFact;
   wallWarning: ThresholdFact;
-  wallHardSeal: ThresholdFact;
+  wallEscalation: ThresholdFact;
 } | {
   available: false;
   anomalies: readonly ClockAnomaly[];
@@ -393,8 +393,8 @@ export function measureCadence(
     available: true,
     activeTarget: thresholdFact(snapshot.activeMs, policy.cadence.activeTargetMs),
     activeReview: thresholdFact(snapshot.activeMs, policy.cadence.activeReviewMs),
-    activeHardSeal: thresholdFact(snapshot.activeMs, policy.cadence.activeHardSealMs),
+    activeEscalation: thresholdFact(snapshot.activeMs, policy.cadence.activeEscalationMs),
     wallWarning: thresholdFact(snapshot.wallMs, policy.cadence.wallWarningMs),
-    wallHardSeal: thresholdFact(snapshot.wallMs, policy.cadence.wallHardSealMs),
+    wallEscalation: thresholdFact(snapshot.wallMs, policy.cadence.wallEscalationMs),
   };
 }
