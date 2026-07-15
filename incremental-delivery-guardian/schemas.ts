@@ -26,9 +26,9 @@ export const GuardianPolicyConfigSchema = Type.Object({
   cadence: Type.Object({
     activeTargetMs: PositiveInteger(),
     activeReviewMs: PositiveInteger(),
-    activeHardSealMs: PositiveInteger(),
+    activeEscalationMs: PositiveInteger(),
     wallWarningMs: PositiveInteger(),
-    wallHardSealMs: PositiveInteger(),
+    wallEscalationMs: PositiveInteger(),
   }, Strict),
   scopeLedger: Type.Object({
     maxUnplannedMs: PositiveInteger(),
@@ -43,9 +43,9 @@ export const RepositoryPolicyConfigSchema = Type.Object({
   cadence: Type.Optional(Type.Object({
     activeTargetMs: Type.Optional(PositiveInteger()),
     activeReviewMs: Type.Optional(PositiveInteger()),
-    activeHardSealMs: Type.Optional(PositiveInteger()),
+    activeEscalationMs: Type.Optional(PositiveInteger()),
     wallWarningMs: Type.Optional(PositiveInteger()),
-    wallHardSealMs: Type.Optional(PositiveInteger()),
+    wallEscalationMs: Type.Optional(PositiveInteger()),
   }, Strict)),
   scopeLedger: Type.Optional(Type.Object({
     maxUnplannedMs: Type.Optional(PositiveInteger()),
@@ -54,39 +54,3 @@ export const RepositoryPolicyConfigSchema = Type.Object({
   humanApprovalRequiredRiskClasses: Type.Optional(Type.Array(RiskClassSchema, { uniqueItems: true })),
 }, Strict);
 export type RepositoryPolicyConfig = Static<typeof RepositoryPolicyConfigSchema>;
-
-const NonEmptyString = () => Type.String({ minLength: 1 });
-const Rfc3339String = () => Type.String({
-  pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
-});
-
-export const PolicyOverrideContractSchema = Type.Object({
-  ...VersionFields,
-  proposalId: NonEmptyString(),
-  decisionId: NonEmptyString(),
-  interactionEventId: NonEmptyString(),
-  exactItem: NonEmptyString(),
-  domains: Type.Array(NonEmptyString(), { minItems: 1, uniqueItems: true }),
-  paths: Type.Array(NonEmptyString(), { minItems: 1, uniqueItems: true }),
-  addedBudgetMs: PositiveInteger(),
-  currentPullRequest: Type.Object({
-    provider: Type.Union([Type.Literal("github"), Type.Literal("bitbucket")]),
-    repositoryId: NonEmptyString(),
-    pullRequestId: NonEmptyString(),
-    headSha: NonEmptyString(),
-    baseRef: NonEmptyString(),
-  }, Strict),
-  issuedAt: Rfc3339String(),
-  expiresAt: Rfc3339String(),
-  binding: Type.Object({
-    actorId: NonEmptyString(),
-    ownerSessionId: NonEmptyString(),
-    channel: Type.Union([
-      Type.Literal("pi_tui"),
-      Type.Literal("harness_web"),
-      Type.Literal("harness_rpc"),
-    ]),
-    authenticatedPrincipalId: Type.Optional(NonEmptyString()),
-  }, Strict),
-}, Strict);
-export type PolicyOverrideContract = Static<typeof PolicyOverrideContractSchema>;

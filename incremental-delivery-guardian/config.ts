@@ -19,9 +19,9 @@ export const DEFAULT_GUARDIAN_POLICY = Object.freeze({
   cadence: Object.freeze({
     activeTargetMs: 3 * HOUR_MS,
     activeReviewMs: 4 * HOUR_MS,
-    activeHardSealMs: 6 * HOUR_MS,
+    activeEscalationMs: 6 * HOUR_MS,
     wallWarningMs: 12 * HOUR_MS,
-    wallHardSealMs: 24 * HOUR_MS,
+    wallEscalationMs: 24 * HOUR_MS,
   }),
   scopeLedger: Object.freeze({ maxUnplannedMs: 30 * MINUTE_MS, maxMicroItems: 5 }),
   humanApprovalRequiredRiskClasses: Object.freeze([

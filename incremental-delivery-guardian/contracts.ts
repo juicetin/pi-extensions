@@ -5,10 +5,8 @@ import {
   GUARDIAN_POLICY_VERSION,
   GUARDIAN_SCHEMA_VERSION,
   GuardianPolicyConfigSchema,
-  PolicyOverrideContractSchema,
   RepositoryPolicyConfigSchema,
   type GuardianPolicyConfig,
-  type PolicyOverrideContract,
   type RepositoryPolicyConfig,
 } from "./schemas.ts";
 
@@ -54,12 +52,12 @@ function decode<T extends TSchema>(schema: T, input: unknown, label: string): St
 function assertPolicyOrdering(policy: GuardianPolicyConfig): void {
   const { cadence } = policy;
   const activeOrdered = cadence.activeTargetMs <= cadence.activeReviewMs
-    && cadence.activeReviewMs <= cadence.activeHardSealMs;
-  const wallOrdered = cadence.wallWarningMs <= cadence.wallHardSealMs;
+    && cadence.activeReviewMs <= cadence.activeEscalationMs;
+  const wallOrdered = cadence.wallWarningMs <= cadence.wallEscalationMs;
   if (!activeOrdered || !wallOrdered) {
     throw new GuardianContractError(
       "invalid_policy_ordering",
-      "Invalid guardian policy ordering: require activeTargetMs <= activeReviewMs <= activeHardSealMs and wallWarningMs <= wallHardSealMs.",
+      "Invalid guardian policy ordering: require activeTargetMs <= activeReviewMs <= activeEscalationMs and wallWarningMs <= wallEscalationMs.",
     );
   }
 }
@@ -72,24 +70,4 @@ export function decodeGuardianPolicy(input: unknown): GuardianPolicyConfig {
 
 export function decodeRepositoryPolicy(input: unknown): RepositoryPolicyConfig {
   return decode(RepositoryPolicyConfigSchema, input, "repository policy");
-}
-
-function hasValidRfc3339CalendarDate(value: string): boolean {
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-export function decodePolicyOverride(input: unknown): PolicyOverrideContract {
-  const override = decode(PolicyOverrideContractSchema, input, "policy override contract");
-  const invalidTimestamps = ["issuedAt", "expiresAt"].filter((field) => (
-    !hasValidRfc3339CalendarDate(override[field as "issuedAt" | "expiresAt"])
-  ));
-  if (invalidTimestamps.length > 0) {
-    throw new GuardianContractError(
-      "invalid_record",
-      `Invalid policy override contract timestamps: ${invalidTimestamps.join(", ")}.`,
-      invalidTimestamps,
-    );
-  }
-  return override;
 }

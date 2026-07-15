@@ -3,14 +3,12 @@ import { createRequire } from "node:module";
 
 import {
   GuardianPolicyConfigSchema,
-  PolicyOverrideContractSchema,
   RepositoryPolicyConfigSchema,
 } from "./schemas.ts";
 
 export {
   GuardianContractError,
   decodeGuardianPolicy,
-  decodePolicyOverride,
   decodeRepositoryPolicy,
   type GuardianContractErrorCode,
 } from "./contracts.ts";
@@ -18,11 +16,9 @@ export {
   GUARDIAN_POLICY_VERSION,
   GUARDIAN_SCHEMA_VERSION,
   GuardianPolicyConfigSchema,
-  PolicyOverrideContractSchema,
   RepositoryPolicyConfigSchema,
   RiskClassSchema,
   type GuardianPolicyConfig,
-  type PolicyOverrideContract,
   type RepositoryPolicyConfig,
   type RiskClass,
 } from "./schemas.ts";
@@ -44,7 +40,6 @@ function canonicalize(value: unknown): unknown {
 
 const exportedSchemas = {
   GuardianPolicyConfigSchema,
-  PolicyOverrideContractSchema,
   RepositoryPolicyConfigSchema,
 };
 const canonicalSchemas = JSON.stringify(canonicalize(exportedSchemas));
