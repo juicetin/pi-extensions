@@ -145,6 +145,7 @@ export function createPassiveGuardianExtension() {
     const registrations = new Map<string, DeliverySliceRegistration>();
     let sessionCwd: string | undefined;
     let sessionExcluded = true;
+    let userBashSequence = 0;
 
     const unregisterRegistration = pi.events.on(GUARDIAN_REGISTRATION_EVENT, (input) => {
       if (!sessionCwd) {
@@ -238,6 +239,7 @@ export function createPassiveGuardianExtension() {
       registrations.clear();
       sessionCwd = ctx.cwd;
       sessionExcluded = protectedPath(ctx.cwd);
+      userBashSequence = 0;
       ctxForNotification = ctx;
     });
 
@@ -253,8 +255,10 @@ export function createPassiveGuardianExtension() {
     pi.on("user_bash", (_event, ctx) => {
       if (sessionExcluded) return;
       const registrationIds = [...registrations.values()].filter((registration) => within(ctx.cwd, registration.repositoryRoot)).map((registration) => registration.registrationId).sort();
+      userBashSequence += 1;
+      const operationId = `user_bash:${userBashSequence}`;
       queueVisible(() => emitVisible(pi, GUARDIAN_TELEMETRY_EVENT, {
-        status: "operation_observed", source: "user_bash", operationId: "user_bash",
+        status: "operation_observed", source: "user_bash", operationId,
         operationName: "bash", registrationIds, mutationEffect: "unchanged",
       }, ctx), ctx);
     });
@@ -263,6 +267,7 @@ export function createPassiveGuardianExtension() {
       registrations.clear();
       sessionCwd = undefined;
       sessionExcluded = true;
+      userBashSequence = 0;
       ctxForNotification = undefined;
       unregisterRegistration();
       unregisterObservation();

@@ -175,7 +175,7 @@ test("tool_call and user_bash handlers return immediately and preserve operation
   await flush();
   assert.deepEqual(telemetry.slice(-2), [
     { status: "operation_observed", source: "tool_call", operationId: "tool-1", operationName: "edit", registrationIds: ["reg-1", "reg-a", "reg-z"], mutationEffect: "unchanged" },
-    { status: "operation_observed", source: "user_bash", operationId: "user_bash", operationName: "bash", registrationIds: ["reg-1", "reg-a", "reg-z"], mutationEffect: "unchanged" },
+    { status: "operation_observed", source: "user_bash", operationId: "user_bash:1", operationName: "bash", registrationIds: ["reg-1", "reg-a", "reg-z"], mutationEffect: "unchanged" },
   ]);
   const otherContext = ctx("/data/other");
   handlers.get("tool_call")!({ toolCallId: "other", toolName: "read", input: {} }, otherContext);
@@ -183,6 +183,7 @@ test("tool_call and user_bash handlers return immediately and preserve operation
   await flush();
   assert.deepEqual(telemetry.at(-2).registrationIds, []);
   assert.deepEqual(telemetry.at(-1).registrationIds, []);
+  assert.equal(telemetry.at(-1).operationId, "user_bash:2");
 });
 
 test("invalid, pre-session, and repository-mismatched registration stays visible", async () => {
