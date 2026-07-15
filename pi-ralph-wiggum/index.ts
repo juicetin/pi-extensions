@@ -8,6 +8,13 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { ClockCheckpoint } from "../incremental-delivery-guardian/clock.ts";
+import {
+	ProviderEvidenceError,
+	validateProtectedLifecycleEvidence,
+	type DeliveryClaim,
+	type DeliveryReceipt,
+	type ProviderPullRequestEvidence,
+} from "../incremental-delivery-guardian/provider.ts";
 
 const RALPH_DIR = ".ralph";
 const COMPLETE_MARKER = "<promise>COMPLETE</promise>";
@@ -76,6 +83,12 @@ interface RalphGuardianState {
 	};
 }
 
+interface RalphDeliveryRecord {
+	iteration: number;
+	completed: boolean;
+	receipt: DeliveryReceipt;
+}
+
 interface LoopState {
 	name: string;
 	taskFile: string;
@@ -92,9 +105,45 @@ interface LoopState {
 	ownerSessionId?: string; // Session that currently owns automatic prompt injection for this loop
 	schemaVersion: 1;
 	guardian: RalphGuardianState;
+	lastDelivery?: RalphDeliveryRecord;
+	consumedDeliveryReceiptHashes: string[];
 }
 
 const STATUS_ICONS: Record<LoopStatus, string> = { active: "▶", paused: "⏸", completed: "✓" };
+
+const DeliveryClaimSchema = Type.Object({
+	repositoryId: Type.String(),
+	pullRequestNumber: Type.Integer({ minimum: 1 }),
+	branch: Type.String(),
+	headSha: Type.String(),
+	baseRef: Type.String(),
+	observedAt: Type.String(),
+	maxAgeMs: Type.Integer({ minimum: 1 }),
+	local: Type.Object({
+		commitSha: Type.String(),
+		branch: Type.String(),
+		pushed: Type.Boolean(),
+		verificationId: Type.String(),
+		verificationCompletedAt: Type.String(),
+	}),
+});
+
+const ProviderEvidenceSchema = Type.Object({
+	provider: Type.String(),
+	repositoryId: Type.String(),
+	pullRequestNumber: Type.Integer({ minimum: 1 }),
+	state: Type.String(),
+	merged: Type.Boolean(),
+	updatedAt: Type.String(),
+	observedAt: Type.String(),
+	headRef: Type.String(),
+	headSha: Type.String(),
+	headRepositoryId: Type.String(),
+	baseRef: Type.String(),
+	baseRepositoryId: Type.String(),
+	ciState: Type.String(),
+	reviewState: Type.String(),
+});
 
 export default function (pi: ExtensionAPI) {
 	let currentLoop: string | null = null;
@@ -178,6 +227,7 @@ export default function (pi: ExtensionAPI) {
 		}
 		raw.schemaVersion = 1;
 		raw.guardian ??= createGuardianState(raw.name, raw.startedAt as string);
+		raw.consumedDeliveryReceiptHashes ??= [];
 		return raw as LoopState;
 	}
 
@@ -384,6 +434,7 @@ export default function (pi: ExtensionAPI) {
 				ownerSessionId: sessionId(ctx),
 				schemaVersion: 1,
 				guardian: createGuardianState(loopName, startedAt),
+				consumedDeliveryReceiptHashes: [],
 			};
 
 			saveState(ctx, state);
@@ -706,6 +757,7 @@ Examples:
 				ownerSessionId: sessionId(ctx),
 				schemaVersion: 1,
 				guardian: createGuardianState(loopName, startedAt),
+				consumedDeliveryReceiptHashes: [],
 			};
 
 			saveState(ctx, state);
@@ -725,14 +777,19 @@ Examples:
 	pi.registerTool({
 		name: "ralph_done",
 		label: "Ralph Iteration Done",
-		description: "Signal that you've completed this iteration of the Ralph loop. Call this after making progress to get the next iteration prompt. Do NOT call this if you've output the completion marker.",
-		promptSnippet: "Advance an active Ralph loop after completing the current iteration.",
+		description: "Advance or complete the active Ralph loop using exact local and provider delivery evidence.",
+		promptSnippet: "Advance an active Ralph loop with a structured delivery receipt.",
 		promptGuidelines: [
-			"Call this after making real iteration progress so Ralph can queue the next prompt.",
-			"Do not call this if there is no active loop, if pending messages are already queued, or if the completion marker has already been emitted.",
+			"Call ralph_done only after the current iteration has an exact pushed commit, completed verification, open pull request, successful CI, and current exact-head approval.",
+			"Set ralph_done complete to true only for final completion; a text completion marker alone does not complete the loop.",
 		],
-		parameters: Type.Object({}),
-		async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+		parameters: Type.Object({
+			ownerSessionId: Type.String(),
+			complete: Type.Optional(Type.Boolean()),
+			claim: DeliveryClaimSchema,
+			evidence: ProviderEvidenceSchema,
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!currentLoop) {
 				return { content: [{ type: "text", text: "No active Ralph loop." }], details: {} };
 			}
@@ -749,19 +806,46 @@ Examples:
 				};
 			}
 
-			// Increment iteration
-			state.iteration++;
+			let receipt: DeliveryReceipt;
+			try {
+				if (params.ownerSessionId !== sessionId(ctx) || params.ownerSessionId !== state.ownerSessionId) {
+					throw new ProviderEvidenceError("claim_mismatch", "Ralph delivery owner does not match the active session.");
+				}
+				if (params.complete !== undefined && typeof params.complete !== "boolean") {
+					throw new ProviderEvidenceError("invalid_request", "Ralph completion intent must be boolean.");
+				}
+				if (params.evidence.provider !== "github" && params.evidence.provider !== "bitbucket") {
+					throw new ProviderEvidenceError("invalid_request", "Ralph delivery provider is unsupported.");
+				}
+				receipt = validateProtectedLifecycleEvidence(
+					params.claim as DeliveryClaim,
+					params.evidence as ProviderPullRequestEvidence,
+				);
+			} catch (error) {
+				const code = error instanceof ProviderEvidenceError ? error.code : "invalid_request";
+				return { content: [{ type: "text", text: `Ralph delivery rejected: ${code}.` }], details: { code } };
+			}
 
-			// Check max iterations
-			if (state.maxIterations > 0 && state.iteration > state.maxIterations) {
+			if (state.consumedDeliveryReceiptHashes.includes(receipt.receiptHash)) {
+				return { content: [{ type: "text", text: "Ralph delivery rejected: receipt_replayed." }], details: { code: "receipt_replayed" } };
+			}
+			state.consumedDeliveryReceiptHashes.push(receipt.receiptHash);
+			state.lastDelivery = { iteration: state.iteration, completed: params.complete === true, receipt };
+			if (params.complete === true) {
 				completeLoop(
 					ctx,
 					state,
 					`───────────────────────────────────────────────────────────────────────
-⚠️ RALPH LOOP STOPPED: ${state.name} | Max iterations (${state.maxIterations}) reached
+✅ RALPH LOOP COMPLETE: ${state.name} | ${state.iteration} iterations
 ───────────────────────────────────────────────────────────────────────`,
 				);
-				return { content: [{ type: "text", text: "Max iterations reached. Loop stopped." }], details: {} };
+				return { content: [{ type: "text", text: `Ralph loop "${state.name}" completed with verified delivery.` }], details: { receipt } };
+			}
+
+			state.iteration++;
+			if (state.maxIterations > 0 && state.iteration > state.maxIterations) {
+				pauseLoop(ctx, state);
+				return { content: [{ type: "text", text: "Max iterations reached. Loop paused after verified delivery." }], details: { receipt } };
 			}
 
 			const needsReflection = state.reflectEvery > 0 && (state.iteration - 1) % state.reflectEvery === 0;
@@ -781,7 +865,7 @@ Examples:
 
 			return {
 				content: [{ type: "text", text: `Iteration ${state.iteration - 1} complete. Next iteration queued.` }],
-				details: {},
+				details: { receipt },
 			};
 		},
 	});
@@ -803,8 +887,8 @@ Examples:
 		instructions += `- Update the task file as you progress\n`;
 		instructions += `- Preserve artifacts needed by final verification\n`;
 		instructions += `- Record an exact monitor-rerunnable final command before completion\n`;
-		instructions += `- When FULLY COMPLETE and externally rerunnable: ${COMPLETE_MARKER}\n`;
-		instructions += `- Otherwise, call ralph_done tool to proceed to next iteration`;
+		instructions += `- A ${COMPLETE_MARKER} text marker alone does not complete the loop\n`;
+		instructions += `- Call ralph_done with exact structured delivery evidence; set complete only for final completion`;
 
 		return {
 			systemPrompt: event.systemPrompt + `\n[RALPH LOOP - ${state.name} - Iteration ${iterStr}]\n\n${instructions}`,
@@ -826,27 +910,8 @@ Examples:
 						.join("\n")
 				: "";
 
-		if (text.includes(COMPLETE_MARKER)) {
-			completeLoop(
-				ctx,
-				state,
-				`───────────────────────────────────────────────────────────────────────
-✅ RALPH LOOP COMPLETE: ${state.name} | ${state.iteration} iterations
-───────────────────────────────────────────────────────────────────────`,
-			);
-			return;
-		}
-
-		// Check max iterations
-		if (state.maxIterations > 0 && state.iteration >= state.maxIterations) {
-			completeLoop(
-				ctx,
-				state,
-				`───────────────────────────────────────────────────────────────────────
-⚠️ RALPH LOOP STOPPED: ${state.name} | Max iterations (${state.maxIterations}) reached
-───────────────────────────────────────────────────────────────────────`,
-			);
-			return;
+		if (text.includes(COMPLETE_MARKER) && ctx.hasUI) {
+			ctx.ui.notify("Completion marker ignored: call ralph_done with exact structured delivery evidence.", "warning");
 		}
 
 		// Don't auto-continue - let the agent call ralph_done to proceed
