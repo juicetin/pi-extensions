@@ -48,8 +48,9 @@ export interface GitHubEvidenceRequest {
   readonly pullRequestNumber: number;
   readonly observedAt: string;
 }
-export interface GitHubPullRequestEvidence {
-  readonly provider: "github";
+export type ProviderName = "github" | "bitbucket";
+export interface ProviderPullRequestEvidence {
+  readonly provider: ProviderName;
   readonly repositoryId: string;
   readonly pullRequestNumber: number;
   readonly state: "open" | "closed";
@@ -63,6 +64,9 @@ export interface GitHubPullRequestEvidence {
   readonly baseRepositoryId: string;
   readonly ciState: CiState;
   readonly reviewState: ReviewState;
+}
+export interface GitHubPullRequestEvidence extends ProviderPullRequestEvidence {
+  readonly provider: "github";
 }
 
 export interface DeliveryClaim {
@@ -83,7 +87,7 @@ export interface DeliveryClaim {
 }
 export interface DeliveryReceipt {
   readonly schemaVersion: 1;
-  readonly provider: "github";
+  readonly provider: ProviderName;
   readonly repositoryId: string;
   readonly pullRequestNumber: number;
   readonly branch: string;
@@ -210,7 +214,7 @@ function requiredText(value: string): boolean {
   return value.trim().length > 0;
 }
 
-export function validateDeliveryEvidence(claim: DeliveryClaim, evidence: GitHubPullRequestEvidence): DeliveryReceipt {
+export function validateDeliveryEvidence(claim: DeliveryClaim, evidence: ProviderPullRequestEvidence): DeliveryReceipt {
   const observedAt = Date.parse(claim.observedAt);
   const evidenceAt = Date.parse(evidence.observedAt);
   const verificationAt = Date.parse(claim.local.verificationCompletedAt);
@@ -234,7 +238,7 @@ export function validateDeliveryEvidence(claim: DeliveryClaim, evidence: GitHubP
   if (!exact) throw new ProviderEvidenceError("claim_mismatch", "Delivery claim does not match local and provider evidence.");
   const receiptCore = {
     schemaVersion: 1 as const,
-    provider: "github" as const,
+    provider: evidence.provider,
     repositoryId: claim.repositoryId,
     pullRequestNumber: claim.pullRequestNumber,
     branch: claim.branch,
@@ -248,7 +252,7 @@ export function validateDeliveryEvidence(claim: DeliveryClaim, evidence: GitHubP
   return { ...receiptCore, receiptHash: createHash("sha256").update(JSON.stringify(receiptCore)).digest("hex") };
 }
 
-export function validateProtectedLifecycleEvidence(claim: DeliveryClaim, evidence: GitHubPullRequestEvidence): DeliveryReceipt {
+export function validateProtectedLifecycleEvidence(claim: DeliveryClaim, evidence: ProviderPullRequestEvidence): DeliveryReceipt {
   const receipt = validateDeliveryEvidence(claim, evidence);
   if (receipt.ciState !== "success") throw new ProviderEvidenceError("ci_not_successful", "Protected lifecycle action requires successful CI.");
   if (receipt.reviewState !== "approved") throw new ProviderEvidenceError("review_not_approved", "Protected lifecycle action requires current approval for the exact head.");
