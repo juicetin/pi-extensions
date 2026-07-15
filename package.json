@@ -24,6 +24,7 @@
       "./arcade/mario-not/mario-not.ts",
       "./code-actions/index.ts",
       "./files-widget/index.ts",
+      "./incremental-delivery-guardian/index.ts",
       "./raw-paste/index.ts",
       "./pi-ralph-wiggum/index.ts",
       "./session-recap/index.ts",
