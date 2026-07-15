@@ -1,0 +1,11 @@
+{
+  "name": "@pi-extensions/incremental-delivery-guardian",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./contracts": "./contracts.ts",
+    "./schemas": "./schemas.ts",
+    "./config": "./config.ts"
+  }
+}

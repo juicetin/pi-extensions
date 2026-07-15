@@ -94,3 +94,9 @@ Brief description.
 4. Reflect when stuck to reassess approach.
 5. Preserve the environment needed to rerun final verification.
 6. Output the completion marker only when truly done and externally rerunnable.
+
+## Advisory guardian behavior
+
+Treat cadence and scope output as facts, nudges, and review requests. Do not delay, deny, rewrite, or require replay of implementation work because of those observations. Preserve the exact owner and guardian timeline on resume; resume never advances the iteration.
+
+Completion remains receipt-gated. Before emitting `<promise>COMPLETE</promise>`, require the structured exact-head receipt and externally rerunnable verification described in the task file. Advisory review output cannot replace provider evidence or approval.
