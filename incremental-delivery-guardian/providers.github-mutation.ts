@@ -15,16 +15,14 @@ export interface GitHubMutationClient {
 interface GitHubWriteClient { pulls:{
   merge(input:{owner:string;repo:string;pull_number:number;sha:string}):Promise<{data:{merged:boolean;sha:string}}>;
   update(input:{owner:string;repo:string;pull_number:number;base:string}):Promise<{data:{head:{sha:string};base:{ref:string}}}>;
-  updateBranch(input:{owner:string;repo:string;pull_number:number;expected_head_sha:string}):Promise<{data:{latest_commit_sha:string}}>;
 } }
 function repositoryParts(repositoryId:string):{owner:string;repo:string}{const parts=repositoryId.split("/");if(parts.length!==2||parts.some(part=>!part))throw new Error("github_repository_invalid");return{owner:parts[0]!,repo:parts[1]!};}
-export class OctokitGitHubMutationClient implements GitHubMutationClient {
+export class OctokitGitHubMutationClient implements Pick<GitHubMutationClient,"merge"|"retarget"> {
   private readonly client:GitHubWriteClient;
   constructor(client:GitHubWriteClient){this.client=client;}
   static authenticated(token:string,timeoutMs:number){const octokit=new Octokit(createGitHubOctokitOptions(token,timeoutMs));return new OctokitGitHubMutationClient(octokit.rest as unknown as GitHubWriteClient);}
   async merge(input:{repositoryId:string;pullRequestNumber:number;expectedHeadSha:string}){const repo=repositoryParts(input.repositoryId);const response=await this.client.pulls.merge({...repo,pull_number:input.pullRequestNumber,sha:input.expectedHeadSha});return{merged:response.data.merged,sha:response.data.sha};}
   async retarget(input:{repositoryId:string;pullRequestNumber:number;newBaseRef:string;expectedHeadSha:string}){const repo=repositoryParts(input.repositoryId);const response=await this.client.pulls.update({...repo,pull_number:input.pullRequestNumber,base:input.newBaseRef});if(response.data.head.sha!==input.expectedHeadSha||response.data.base.ref!==input.newBaseRef)throw new Error("github_retarget_not_confirmed");}
-  async rebase(input:{repositoryId:string;pullRequestNumber:number;expectedHeadSha:string}){const repo=repositoryParts(input.repositoryId);const response=await this.client.pulls.updateBranch({...repo,pull_number:input.pullRequestNumber,expected_head_sha:input.expectedHeadSha});if(!response.data.latest_commit_sha)throw new Error("github_rebase_not_confirmed");return{headSha:response.data.latest_commit_sha};}
 }
 export interface MergeDependencies {
   readonly client:GitHubMutationClient;
