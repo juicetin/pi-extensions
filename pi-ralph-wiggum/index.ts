@@ -7,6 +7,21 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { foldClockEvents, measureCadence, type ClockCheckpoint, type ClockEvent } from "../incremental-delivery-guardian/clock.ts";
+import {
+	DEFAULT_GUARDIAN_POLICY,
+	GUARDIAN_OBSERVATION_EVENT,
+	GUARDIAN_REGISTRATION_EVENT,
+} from "../incremental-delivery-guardian/index.ts";
+import type { ScopeLedgerFacts } from "../incremental-delivery-guardian/ledger.ts";
+import type { ScopeFact } from "../incremental-delivery-guardian/scope.ts";
+import {
+	ProviderEvidenceError,
+	validateProtectedLifecycleEvidence,
+	type DeliveryClaim,
+	type DeliveryReceipt,
+	type ProviderPullRequestEvidence,
+} from "../incremental-delivery-guardian/provider.ts";
 
 const RALPH_DIR = ".ralph";
 const COMPLETE_MARKER = "<promise>COMPLETE</promise>";
@@ -64,6 +79,23 @@ Update the task file with your reflection, then continue working.`;
 
 type LoopStatus = "active" | "paused" | "completed";
 
+interface RalphGuardianState {
+	schemaVersion: 1;
+	timelineId: string;
+	wallStartedAtMs: number;
+	clockCheckpoint?: ClockCheckpoint;
+	observedScope: {
+		paths: readonly string[];
+		domains: readonly string[];
+	};
+}
+
+interface RalphDeliveryRecord {
+	iteration: number;
+	completed: boolean;
+	receipt: DeliveryReceipt;
+}
+
 interface LoopState {
 	name: string;
 	taskFile: string;
@@ -77,9 +109,48 @@ interface LoopState {
 	startedAt: string;
 	completedAt?: string;
 	lastReflectionAt: number; // Last iteration we reflected at
+	ownerSessionId?: string; // Session that currently owns automatic prompt injection for this loop
+	schemaVersion: 1;
+	guardian: RalphGuardianState;
+	lastDelivery?: RalphDeliveryRecord;
+	consumedDeliveryReceiptHashes: string[];
 }
 
 const STATUS_ICONS: Record<LoopStatus, string> = { active: "▶", paused: "⏸", completed: "✓" };
+
+const DeliveryClaimSchema = Type.Object({
+	repositoryId: Type.String(),
+	pullRequestNumber: Type.Integer({ minimum: 1 }),
+	branch: Type.String(),
+	headSha: Type.String(),
+	baseRef: Type.String(),
+	observedAt: Type.String(),
+	maxAgeMs: Type.Integer({ minimum: 1 }),
+	local: Type.Object({
+		commitSha: Type.String(),
+		branch: Type.String(),
+		pushed: Type.Boolean(),
+		verificationId: Type.String(),
+		verificationCompletedAt: Type.String(),
+	}),
+});
+
+const ProviderEvidenceSchema = Type.Object({
+	provider: Type.String(),
+	repositoryId: Type.String(),
+	pullRequestNumber: Type.Integer({ minimum: 1 }),
+	state: Type.String(),
+	merged: Type.Boolean(),
+	updatedAt: Type.String(),
+	observedAt: Type.String(),
+	headRef: Type.String(),
+	headSha: Type.String(),
+	headRepositoryId: Type.String(),
+	baseRef: Type.String(),
+	baseRepositoryId: Type.String(),
+	ciState: Type.String(),
+	reviewState: Type.String(),
+});
 
 export default function (pi: ExtensionAPI) {
 	let currentLoop: string | null = null;
@@ -89,6 +160,7 @@ export default function (pi: ExtensionAPI) {
 	const ralphDir = (ctx: ExtensionContext) => path.resolve(ctx.cwd, RALPH_DIR);
 	const archiveDir = (ctx: ExtensionContext) => path.join(ralphDir(ctx), "archive");
 	const sanitize = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_");
+	const sessionId = (ctx: ExtensionContext) => ctx.sessionManager?.getSessionId?.();
 
 	function getPath(ctx: ExtensionContext, name: string, ext: string, archived = false): string {
 		const dir = archived ? archiveDir(ctx) : ralphDir(ctx);
@@ -137,6 +209,19 @@ export default function (pi: ExtensionAPI) {
 
 	// --- State management ---
 
+	function createGuardianState(name: string, startedAt: string): RalphGuardianState {
+		const wallStartedAtMs = Date.parse(startedAt);
+		if (!Number.isFinite(wallStartedAtMs)) {
+			throw new Error(`Ralph loop "${name}" has an invalid startedAt timestamp.`);
+		}
+		return {
+			schemaVersion: 1,
+			timelineId: `ralph:${sanitize(name)}:${startedAt}`,
+			wallStartedAtMs,
+			observedScope: { paths: [], domains: [] },
+		};
+	}
+
 	function migrateState(raw: Partial<LoopState> & { name: string }): LoopState {
 		if (!raw.status) raw.status = raw.active ? "active" : "paused";
 		raw.active = raw.status === "active";
@@ -147,6 +232,9 @@ export default function (pi: ExtensionAPI) {
 		if ("lastReflectionAtItems" in raw && raw.lastReflectionAt === undefined) {
 			raw.lastReflectionAt = (raw as any).lastReflectionAtItems;
 		}
+		raw.schemaVersion = 1;
+		raw.guardian ??= createGuardianState(raw.name, raw.startedAt as string);
+		raw.consumedDeliveryReceiptHashes ??= [];
 		return raw as LoopState;
 	}
 
@@ -173,6 +261,111 @@ export default function (pi: ExtensionAPI) {
 				return content ? migrateState(JSON.parse(content)) : null;
 			})
 			.filter((s): s is LoopState => s !== null);
+	}
+
+	function emitGuardian(channel: string, data: unknown, ctx: ExtensionContext): void {
+		try {
+			pi.events.emit(channel, data);
+		} catch {
+			if (ctx.hasUI) ctx.ui.notify("Guardian telemetry publication unavailable.", "warning");
+		}
+	}
+
+	function guardianRegistration(state: LoopState, ctx: ExtensionContext) {
+		const repositoryId = sanitize(path.basename(ctx.cwd)) || "repository";
+		return {
+			schemaVersion: 1 as const,
+			registrationId: `ralph:${state.name}`,
+			repositoryId,
+			repositoryRoot: ctx.cwd,
+			ownerId: state.ownerSessionId!,
+			outcome: `Complete Ralph loop ${state.name}`,
+			acceptanceCriteria: ["Complete with exact verified delivery evidence"],
+			beadId: `ralph:${state.name}`,
+			branch: state.lastDelivery?.receipt.branch ?? "unverified",
+			baseRef: state.lastDelivery?.receipt.baseRef ?? "unverified",
+			domains: state.guardian.observedScope.domains.length > 0 ? [...state.guardian.observedScope.domains] : ["ralph"],
+			pathGroups: [{ name: "repository", roots: [ctx.cwd] }],
+			exclusions: [],
+			verificationPlan: ["Use ralph_done with structured provider evidence"],
+			riskClass: "policy_change" as const,
+			dependencies: [],
+		};
+	}
+
+	function scopeFact(state: LoopState): ScopeFact {
+		const observed = state.guardian.observedScope;
+		const expanded = observed.paths.length > 0 || observed.domains.length > 0;
+		return {
+			classification: expanded ? "ambiguous" : "in_scope",
+			reasonCode: expanded ? "missing_canonical_evidence" : "declared_scope",
+			evidence: {
+				kind: "path",
+				domain: observed.domains[0] ?? "ralph",
+				pathGroup: "repository",
+				requestedPaths: [...observed.paths],
+				canonicalPaths: [],
+			},
+		};
+	}
+
+	function ledgerFacts(state: LoopState): ScopeLedgerFacts {
+		const microItems = state.guardian.observedScope.paths.length;
+		return {
+			supportMinutes: { value: 0, threshold: DEFAULT_GUARDIAN_POLICY.scopeLedger.maxUnplannedMs / 60_000, reached: false },
+			microItems: { value: microItems, threshold: DEFAULT_GUARDIAN_POLICY.scopeLedger.maxMicroItems, reached: microItems >= DEFAULT_GUARDIAN_POLICY.scopeLedger.maxMicroItems },
+		};
+	}
+
+	function observeGuardian(state: LoopState, ctx: ExtensionContext, phase: "started" | "settled"): void {
+		try {
+			const ownerSessionId = sessionId(ctx);
+			if (!ownerSessionId || ownerSessionId !== state.ownerSessionId) throw new Error("owner_unavailable");
+			const now = Date.now();
+			const activityId = `iteration:${state.iteration}`;
+			const openActivities = state.guardian.clockCheckpoint?.openActivities ?? [];
+			const open = openActivities.some((activity) => activity.activityId === activityId);
+			const kind = phase === "started" ? (open ? "heartbeat" : "started") : (open ? "settled" : "observed");
+			const event = {
+				kind,
+				ownerSessionId,
+				timelineId: state.guardian.timelineId,
+				monotonicMs: now,
+				wallMs: now,
+				activityId,
+			} as ClockEvent;
+			const snapshot = foldClockEvents({
+				ownerSessionId,
+				timelineId: state.guardian.timelineId,
+				wallStartedAtMs: state.guardian.wallStartedAtMs,
+				checkpoint: state.guardian.clockCheckpoint,
+				events: [event],
+				heartbeatGraceMs: 60_000,
+				maxWallSkewMs: 5_000,
+			});
+			state.guardian.clockCheckpoint = snapshot.checkpoint;
+			saveState(ctx, state);
+			emitGuardian(GUARDIAN_OBSERVATION_EVENT, {
+				registrationId: `ralph:${state.name}`,
+				observationId: `${state.name}:${state.iteration}:${phase}:${now}`,
+				cadence: measureCadence(snapshot, DEFAULT_GUARDIAN_POLICY),
+				scope: scopeFact(state),
+				ledger: ledgerFacts(state),
+			}, ctx);
+		} catch {
+			emitGuardian(GUARDIAN_OBSERVATION_EVENT, {
+				registrationId: `ralph:${state.name}`,
+				observationId: `${state.name}:${state.iteration}:${phase}:unavailable`,
+				cadence: { available: false, anomalies: [] },
+				scope: scopeFact(state),
+				ledger: ledgerFacts(state),
+				componentIssues: [{ component: "ralph_adapter", code: "observation_unavailable" }],
+			}, ctx);
+		}
+	}
+
+	function queueGuardianRegistration(state: LoopState, ctx: ExtensionContext): void {
+		queueMicrotask(() => emitGuardian(GUARDIAN_REGISTRATION_EVENT, guardianRegistration(state, ctx), ctx));
 	}
 
 	// --- Loop state transitions ---
@@ -337,6 +530,7 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`Created task file: ${taskFile}`, "info");
 			}
 
+			const startedAt = existing?.startedAt || new Date().toISOString();
 			const state: LoopState = {
 				name: loopName,
 				taskFile,
@@ -347,13 +541,18 @@ export default function (pi: ExtensionAPI) {
 				reflectInstructions: args.reflectInstructions,
 				active: true,
 				status: "active",
-				startedAt: existing?.startedAt || new Date().toISOString(),
+				startedAt,
 				lastReflectionAt: 0,
+				ownerSessionId: sessionId(ctx),
+				schemaVersion: 1,
+				guardian: createGuardianState(loopName, startedAt),
+				consumedDeliveryReceiptHashes: [],
 			};
 
 			saveState(ctx, state);
 			currentLoop = loopName;
 			updateUI(ctx);
+			queueGuardianRegistration(state, ctx);
 
 			const content = tryRead(fullPath);
 			if (!content) {
@@ -365,10 +564,12 @@ export default function (pi: ExtensionAPI) {
 
 		stop(_rest, ctx) {
 			if (!currentLoop) {
-				// Check persisted state for any active loop
-				const active = listLoops(ctx).find((l) => l.status === "active");
-				if (active) {
-					pauseLoop(ctx, active, `Paused Ralph loop: ${active.name} (iteration ${active.iteration})`);
+				const currentSessionId = sessionId(ctx);
+				const owned = currentSessionId
+					? listLoops(ctx).find((loop) => loop.status === "active" && loop.ownerSessionId === currentSessionId)
+					: undefined;
+				if (owned) {
+					pauseLoop(ctx, owned, `Paused Ralph loop: ${owned.name} (iteration ${owned.iteration})`);
 				} else {
 					ctx.ui.notify("No active Ralph loop", "warning");
 				}
@@ -405,10 +606,11 @@ export default function (pi: ExtensionAPI) {
 
 			state.status = "active";
 			state.active = true;
-			state.iteration++;
+			state.ownerSessionId = sessionId(ctx);
 			saveState(ctx, state);
 			currentLoop = loopName;
 			updateUI(ctx);
+			queueGuardianRegistration(state, ctx);
 
 			ctx.ui.notify(`Resumed: ${loopName} (iteration ${state.iteration})`, "info");
 
@@ -653,6 +855,7 @@ Examples:
 			ensureDir(fullPath);
 			fs.writeFileSync(fullPath, params.taskContent, "utf-8");
 
+			const startedAt = new Date().toISOString();
 			const state: LoopState = {
 				name: loopName,
 				taskFile,
@@ -663,13 +866,18 @@ Examples:
 				reflectInstructions: DEFAULT_REFLECT_INSTRUCTIONS,
 				active: true,
 				status: "active",
-				startedAt: new Date().toISOString(),
+				startedAt,
 				lastReflectionAt: 0,
+				ownerSessionId: sessionId(ctx),
+				schemaVersion: 1,
+				guardian: createGuardianState(loopName, startedAt),
+				consumedDeliveryReceiptHashes: [],
 			};
 
 			saveState(ctx, state);
 			currentLoop = loopName;
 			updateUI(ctx);
+			queueGuardianRegistration(state, ctx);
 
 			pi.sendUserMessage(buildPrompt(state, params.taskContent, false), { deliverAs: "followUp" });
 
@@ -684,14 +892,19 @@ Examples:
 	pi.registerTool({
 		name: "ralph_done",
 		label: "Ralph Iteration Done",
-		description: "Signal that you've completed this iteration of the Ralph loop. Call this after making progress to get the next iteration prompt. Do NOT call this if you've output the completion marker.",
-		promptSnippet: "Advance an active Ralph loop after completing the current iteration.",
+		description: "Advance or complete the active Ralph loop using exact local and provider delivery evidence.",
+		promptSnippet: "Advance an active Ralph loop with a structured delivery receipt.",
 		promptGuidelines: [
-			"Call this after making real iteration progress so Ralph can queue the next prompt.",
-			"Do not call this if there is no active loop, if pending messages are already queued, or if the completion marker has already been emitted.",
+			"Call ralph_done only after the current iteration has an exact pushed commit, completed verification, open pull request, successful CI, and current exact-head approval.",
+			"Set ralph_done complete to true only for final completion; a text completion marker alone does not complete the loop.",
 		],
-		parameters: Type.Object({}),
-		async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+		parameters: Type.Object({
+			ownerSessionId: Type.String(),
+			complete: Type.Optional(Type.Boolean()),
+			claim: DeliveryClaimSchema,
+			evidence: ProviderEvidenceSchema,
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!currentLoop) {
 				return { content: [{ type: "text", text: "No active Ralph loop." }], details: {} };
 			}
@@ -708,19 +921,46 @@ Examples:
 				};
 			}
 
-			// Increment iteration
-			state.iteration++;
+			let receipt: DeliveryReceipt;
+			try {
+				if (params.ownerSessionId !== sessionId(ctx) || params.ownerSessionId !== state.ownerSessionId) {
+					throw new ProviderEvidenceError("claim_mismatch", "Ralph delivery owner does not match the active session.");
+				}
+				if (params.complete !== undefined && typeof params.complete !== "boolean") {
+					throw new ProviderEvidenceError("invalid_request", "Ralph completion intent must be boolean.");
+				}
+				if (params.evidence.provider !== "github" && params.evidence.provider !== "bitbucket") {
+					throw new ProviderEvidenceError("invalid_request", "Ralph delivery provider is unsupported.");
+				}
+				receipt = validateProtectedLifecycleEvidence(
+					params.claim as DeliveryClaim,
+					params.evidence as ProviderPullRequestEvidence,
+				);
+			} catch (error) {
+				const code = error instanceof ProviderEvidenceError ? error.code : "invalid_request";
+				return { content: [{ type: "text", text: `Ralph delivery rejected: ${code}.` }], details: { code } };
+			}
 
-			// Check max iterations
-			if (state.maxIterations > 0 && state.iteration > state.maxIterations) {
+			if (state.consumedDeliveryReceiptHashes.includes(receipt.receiptHash)) {
+				return { content: [{ type: "text", text: "Ralph delivery rejected: receipt_replayed." }], details: { code: "receipt_replayed" } };
+			}
+			state.consumedDeliveryReceiptHashes.push(receipt.receiptHash);
+			state.lastDelivery = { iteration: state.iteration, completed: params.complete === true, receipt };
+			if (params.complete === true) {
 				completeLoop(
 					ctx,
 					state,
 					`───────────────────────────────────────────────────────────────────────
-⚠️ RALPH LOOP STOPPED: ${state.name} | Max iterations (${state.maxIterations}) reached
+✅ RALPH LOOP COMPLETE: ${state.name} | ${state.iteration} iterations
 ───────────────────────────────────────────────────────────────────────`,
 				);
-				return { content: [{ type: "text", text: "Max iterations reached. Loop stopped." }], details: {} };
+				return { content: [{ type: "text", text: `Ralph loop "${state.name}" completed with verified delivery.` }], details: { receipt } };
+			}
+
+			state.iteration++;
+			if (state.maxIterations > 0 && state.iteration > state.maxIterations) {
+				pauseLoop(ctx, state);
+				return { content: [{ type: "text", text: "Max iterations reached. Loop paused after verified delivery." }], details: { receipt } };
 			}
 
 			const needsReflection = state.reflectEvery > 0 && (state.iteration - 1) % state.reflectEvery === 0;
@@ -740,7 +980,7 @@ Examples:
 
 			return {
 				content: [{ type: "text", text: `Iteration ${state.iteration - 1} complete. Next iteration queued.` }],
-				details: {},
+				details: { receipt },
 			};
 		},
 	});
@@ -751,6 +991,7 @@ Examples:
 		if (!currentLoop) return;
 		const state = loadState(ctx, currentLoop);
 		if (!state || state.status !== "active") return;
+		observeGuardian(state, ctx, "started");
 
 		const iterStr = `${state.iteration}${state.maxIterations > 0 ? `/${state.maxIterations}` : ""}`;
 
@@ -762,8 +1003,8 @@ Examples:
 		instructions += `- Update the task file as you progress\n`;
 		instructions += `- Preserve artifacts needed by final verification\n`;
 		instructions += `- Record an exact monitor-rerunnable final command before completion\n`;
-		instructions += `- When FULLY COMPLETE and externally rerunnable: ${COMPLETE_MARKER}\n`;
-		instructions += `- Otherwise, call ralph_done tool to proceed to next iteration`;
+		instructions += `- A ${COMPLETE_MARKER} text marker alone does not complete the loop\n`;
+		instructions += `- Call ralph_done with exact structured delivery evidence; set complete only for final completion`;
 
 		return {
 			systemPrompt: event.systemPrompt + `\n[RALPH LOOP - ${state.name} - Iteration ${iterStr}]\n\n${instructions}`,
@@ -774,6 +1015,7 @@ Examples:
 		if (!currentLoop) return;
 		const state = loadState(ctx, currentLoop);
 		if (!state || state.status !== "active") return;
+		observeGuardian(state, ctx, "settled");
 
 		// Check for completion marker
 		const lastAssistant = [...event.messages].reverse().find((m) => m.role === "assistant");
@@ -785,27 +1027,8 @@ Examples:
 						.join("\n")
 				: "";
 
-		if (text.includes(COMPLETE_MARKER)) {
-			completeLoop(
-				ctx,
-				state,
-				`───────────────────────────────────────────────────────────────────────
-✅ RALPH LOOP COMPLETE: ${state.name} | ${state.iteration} iterations
-───────────────────────────────────────────────────────────────────────`,
-			);
-			return;
-		}
-
-		// Check max iterations
-		if (state.maxIterations > 0 && state.iteration >= state.maxIterations) {
-			completeLoop(
-				ctx,
-				state,
-				`───────────────────────────────────────────────────────────────────────
-⚠️ RALPH LOOP STOPPED: ${state.name} | Max iterations (${state.maxIterations}) reached
-───────────────────────────────────────────────────────────────────────`,
-			);
-			return;
+		if (text.includes(COMPLETE_MARKER) && ctx.hasUI) {
+			ctx.ui.notify("Completion marker ignored: call ralph_done with exact structured delivery evidence.", "warning");
 		}
 
 		// Don't auto-continue - let the agent call ralph_done to proceed
@@ -814,19 +1037,24 @@ Examples:
 
 	pi.on("session_start", async (_event, ctx) => {
 		const active = listLoops(ctx).filter((l) => l.status === "active");
+		const currentSessionId = sessionId(ctx);
+		const owned = currentSessionId ? active.filter((l) => l.ownerSessionId === currentSessionId) : [];
 
-		// Rehydrate currentLoop from disk. The module is re-initialized on
-		// session reload (including auto-compaction and /compact), which would
-		// otherwise leave `currentLoop` null and silently break ralph_done,
-		// agent_end, and before_agent_start. Pick the most-recently-updated
-		// active loop when there are multiple, using the state file mtime.
-		if (!currentLoop && active.length > 0) {
-			const mostRecent = active.reduce((best, candidate) => {
+		// Rehydrate only loops that are owned by this Pi session. Older state
+		// files do not have ownerSessionId, so a new unrelated session must use
+		// /ralph resume <name> before Ralph injects loop instructions.
+		if (!currentLoop && owned.length > 0) {
+			const mostRecent = owned.reduce((best, candidate) => {
 				const bestMtime = safeMtimeMs(getPath(ctx, best.name, ".state.json"));
 				const candidateMtime = safeMtimeMs(getPath(ctx, candidate.name, ".state.json"));
 				return candidateMtime > bestMtime ? candidate : best;
 			});
 			currentLoop = mostRecent.name;
+		}
+
+		if (currentLoop) {
+			const state = loadState(ctx, currentLoop);
+			if (state) queueGuardianRegistration(state, ctx);
 		}
 
 		if (active.length > 0 && ctx.hasUI) {
