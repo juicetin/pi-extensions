@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import type { ClockCheckpoint } from "../incremental-delivery-guardian/clock.ts";
 
 const RALPH_DIR = ".ralph";
 const COMPLETE_MARKER = "<promise>COMPLETE</promise>";
@@ -64,6 +65,17 @@ Update the task file with your reflection, then continue working.`;
 
 type LoopStatus = "active" | "paused" | "completed";
 
+interface RalphGuardianState {
+	schemaVersion: 1;
+	timelineId: string;
+	wallStartedAtMs: number;
+	clockCheckpoint?: ClockCheckpoint;
+	observedScope: {
+		paths: readonly string[];
+		domains: readonly string[];
+	};
+}
+
 interface LoopState {
 	name: string;
 	taskFile: string;
@@ -78,6 +90,8 @@ interface LoopState {
 	completedAt?: string;
 	lastReflectionAt: number; // Last iteration we reflected at
 	ownerSessionId?: string; // Session that currently owns automatic prompt injection for this loop
+	schemaVersion: 1;
+	guardian: RalphGuardianState;
 }
 
 const STATUS_ICONS: Record<LoopStatus, string> = { active: "▶", paused: "⏸", completed: "✓" };
@@ -139,6 +153,19 @@ export default function (pi: ExtensionAPI) {
 
 	// --- State management ---
 
+	function createGuardianState(name: string, startedAt: string): RalphGuardianState {
+		const wallStartedAtMs = Date.parse(startedAt);
+		if (!Number.isFinite(wallStartedAtMs)) {
+			throw new Error(`Ralph loop "${name}" has an invalid startedAt timestamp.`);
+		}
+		return {
+			schemaVersion: 1,
+			timelineId: `ralph:${sanitize(name)}:${startedAt}`,
+			wallStartedAtMs,
+			observedScope: { paths: [], domains: [] },
+		};
+	}
+
 	function migrateState(raw: Partial<LoopState> & { name: string }): LoopState {
 		if (!raw.status) raw.status = raw.active ? "active" : "paused";
 		raw.active = raw.status === "active";
@@ -149,6 +176,8 @@ export default function (pi: ExtensionAPI) {
 		if ("lastReflectionAtItems" in raw && raw.lastReflectionAt === undefined) {
 			raw.lastReflectionAt = (raw as any).lastReflectionAtItems;
 		}
+		raw.schemaVersion = 1;
+		raw.guardian ??= createGuardianState(raw.name, raw.startedAt as string);
 		return raw as LoopState;
 	}
 
@@ -339,6 +368,7 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`Created task file: ${taskFile}`, "info");
 			}
 
+			const startedAt = existing?.startedAt || new Date().toISOString();
 			const state: LoopState = {
 				name: loopName,
 				taskFile,
@@ -349,9 +379,11 @@ export default function (pi: ExtensionAPI) {
 				reflectInstructions: args.reflectInstructions,
 				active: true,
 				status: "active",
-				startedAt: existing?.startedAt || new Date().toISOString(),
+				startedAt,
 				lastReflectionAt: 0,
 				ownerSessionId: sessionId(ctx),
+				schemaVersion: 1,
+				guardian: createGuardianState(loopName, startedAt),
 			};
 
 			saveState(ctx, state);
@@ -658,6 +690,7 @@ Examples:
 			ensureDir(fullPath);
 			fs.writeFileSync(fullPath, params.taskContent, "utf-8");
 
+			const startedAt = new Date().toISOString();
 			const state: LoopState = {
 				name: loopName,
 				taskFile,
@@ -668,9 +701,11 @@ Examples:
 				reflectInstructions: DEFAULT_REFLECT_INSTRUCTIONS,
 				active: true,
 				status: "active",
-				startedAt: new Date().toISOString(),
+				startedAt,
 				lastReflectionAt: 0,
 				ownerSessionId: sessionId(ctx),
+				schemaVersion: 1,
+				guardian: createGuardianState(loopName, startedAt),
 			};
 
 			saveState(ctx, state);
