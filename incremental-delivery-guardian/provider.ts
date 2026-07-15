@@ -21,7 +21,11 @@ interface ChecksResponse {
   readonly headers: ResponseHeaders;
 }
 interface ReviewsResponse {
-  readonly data: readonly { readonly user: { readonly id: number } | null; readonly state: string; readonly submitted_at: string | null }[];
+  readonly data: readonly { readonly user: { readonly id: number } | null; readonly state: string; readonly submitted_at: string | null; readonly commit_id: string | null }[];
+  readonly headers: ResponseHeaders;
+}
+interface StatusResponse {
+  readonly data: { readonly state: string; readonly total_count: number };
   readonly headers: ResponseHeaders;
 }
 
@@ -32,6 +36,9 @@ export interface GitHubReadClient {
   };
   readonly checks: {
     listForRef(input: { owner: string; repo: string; ref: string; per_page: 100 }): Promise<ChecksResponse>;
+  };
+  readonly repos: {
+    getCombinedStatusForRef(input: { owner: string; repo: string; ref: string; per_page: 100 }): Promise<StatusResponse>;
   };
 }
 
@@ -89,7 +96,7 @@ export interface DeliveryReceipt {
   readonly receiptHash: string;
 }
 
-export type ProviderEvidenceErrorCode = "invalid_request" | "provider_unavailable" | "incomplete_evidence" | "claim_mismatch" | "stale_evidence" | "pull_request_not_open" | "receipt_invalid" | "ci_not_successful" | "review_not_approved";
+export type ProviderEvidenceErrorCode = "invalid_request" | "provider_unavailable" | "incomplete_evidence" | "claim_mismatch" | "stale_evidence" | "pull_request_not_open" | "ci_not_successful" | "review_not_approved";
 export class ProviderEvidenceError extends Error {
   readonly code: ProviderEvidenceErrorCode;
   constructor(code: ProviderEvidenceErrorCode, message: string, options?: ErrorOptions) {
@@ -119,7 +126,18 @@ function ciState(checks: ChecksResponse["data"]["check_runs"]): CiState {
   return checks.every((check) => check.conclusion !== null && accepted.has(check.conclusion)) ? "success" : "unknown";
 }
 
-function reviewState(reviews: ReviewsResponse["data"]): ReviewState {
+function combinedCiState(checkState: CiState, status: StatusResponse["data"]): CiState {
+  const statusState: CiState = status.total_count === 0 ? "unknown"
+    : status.state === "success" ? "success"
+      : status.state === "pending" ? "pending"
+        : status.state === "failure" || status.state === "error" ? "failure" : "unknown";
+  if (checkState === "failure" || statusState === "failure") return "failure";
+  if (checkState === "pending" || statusState === "pending") return "pending";
+  if (checkState === "success" || statusState === "success") return "success";
+  return "unknown";
+}
+
+function reviewState(reviews: ReviewsResponse["data"], headSha: string): ReviewState {
   const latest = new Map<number, ReviewsResponse["data"][number]>();
   for (const review of reviews) {
     if (!review.user || !review.submitted_at || !validTimestamp(review.submitted_at)) throw new ProviderEvidenceError("incomplete_evidence", "Review identity or timestamp is unavailable.");
@@ -127,7 +145,7 @@ function reviewState(reviews: ReviewsResponse["data"]): ReviewState {
     if (!prior || review.submitted_at > prior.submitted_at!) latest.set(review.user.id, review);
   }
   if ([...latest.values()].some((review) => review.state === "CHANGES_REQUESTED")) return "changes_requested";
-  if ([...latest.values()].some((review) => review.state === "APPROVED")) return "approved";
+  if ([...latest.values()].some((review) => review.state === "APPROVED" && review.commit_id === headSha)) return "approved";
   return "pending";
 }
 
@@ -162,8 +180,9 @@ export class GitHubEvidenceProvider {
       if (!pull.data.head.repo || !pull.data.base.repo) throw new ProviderEvidenceError("incomplete_evidence", "Pull request repository identity is unavailable.");
       if (!validTimestamp(pull.data.updated_at)) throw new ProviderEvidenceError("incomplete_evidence", "Pull request update time is invalid.");
       const checks = await this.client.checks.listForRef({ owner: input.owner, repo: input.repo, ref: pull.data.head.sha, per_page: 100 });
+      const statuses = await this.client.repos.getCombinedStatusForRef({ owner: input.owner, repo: input.repo, ref: pull.data.head.sha, per_page: 100 });
       const reviews = await this.client.pulls.listReviews({ owner: input.owner, repo: input.repo, pull_number: input.pullRequestNumber, per_page: 100 });
-      if (hasNextPage(checks.headers) || hasNextPage(reviews.headers)) throw new ProviderEvidenceError("incomplete_evidence", "Provider evidence exceeds the bounded page.");
+      if (hasNextPage(checks.headers) || hasNextPage(statuses.headers) || hasNextPage(reviews.headers)) throw new ProviderEvidenceError("incomplete_evidence", "Provider evidence exceeds the bounded page.");
       return {
         provider: "github",
         repositoryId: `${input.owner}/${input.repo}`,
@@ -177,8 +196,8 @@ export class GitHubEvidenceProvider {
         headRepositoryId: pull.data.head.repo.full_name,
         baseRef: pull.data.base.ref,
         baseRepositoryId: pull.data.base.repo.full_name,
-        ciState: ciState(checks.data.check_runs),
-        reviewState: reviewState(reviews.data),
+        ciState: combinedCiState(ciState(checks.data.check_runs), statuses.data),
+        reviewState: reviewState(reviews.data, pull.data.head.sha),
       };
     } catch (error) {
       if (error instanceof ProviderEvidenceError) throw error;
@@ -229,13 +248,11 @@ export function validateDeliveryEvidence(claim: DeliveryClaim, evidence: GitHubP
   return { ...receiptCore, receiptHash: createHash("sha256").update(JSON.stringify(receiptCore)).digest("hex") };
 }
 
-export function validateProtectedLifecycleEvidence(receipt: DeliveryReceipt): DeliveryReceipt {
-  const { receiptHash, ...receiptCore } = receipt;
-  const expectedHash = createHash("sha256").update(JSON.stringify(receiptCore)).digest("hex");
-  if (receipt.schemaVersion !== 1 || receiptHash !== expectedHash) throw new ProviderEvidenceError("receipt_invalid", "Delivery receipt integrity check failed.");
+export function validateProtectedLifecycleEvidence(claim: DeliveryClaim, evidence: GitHubPullRequestEvidence): DeliveryReceipt {
+  const receipt = validateDeliveryEvidence(claim, evidence);
   if (receipt.ciState !== "success") throw new ProviderEvidenceError("ci_not_successful", "Protected lifecycle action requires successful CI.");
-  if (receipt.reviewState !== "approved") throw new ProviderEvidenceError("review_not_approved", "Protected lifecycle action requires current approval.");
-  return structuredClone(receipt);
+  if (receipt.reviewState !== "approved") throw new ProviderEvidenceError("review_not_approved", "Protected lifecycle action requires current approval for the exact head.");
+  return receipt;
 }
 
 export async function attemptOptionalGitHubEvidence<TMutation>(provider: GitHubEvidenceProvider, input: GitHubEvidenceRequest, mutation: TMutation) {
