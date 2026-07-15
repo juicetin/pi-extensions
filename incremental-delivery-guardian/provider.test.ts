@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
@@ -16,6 +15,7 @@ import {
 function fakeClient(overrides: Partial<{
   pull: Awaited<ReturnType<GitHubReadClient["pulls"]["get"]>>;
   checks: Awaited<ReturnType<GitHubReadClient["checks"]["listForRef"]>>;
+  statuses: Awaited<ReturnType<GitHubReadClient["repos"]["getCombinedStatusForRef"]>>;
   reviews: Awaited<ReturnType<GitHubReadClient["pulls"]["listReviews"]>>;
 }> = {}) {
   const calls: Array<{ method: string; input: unknown }> = [];
@@ -38,8 +38,8 @@ function fakeClient(overrides: Partial<{
         calls.push({ method: "pulls.listReviews", input });
         return overrides.reviews ?? {
           data: [
-            { user: { id: 1 }, state: "CHANGES_REQUESTED", submitted_at: "2026-07-15T09:00:00Z" },
-            { user: { id: 1 }, state: "APPROVED", submitted_at: "2026-07-15T09:30:00Z" },
+            { user: { id: 1 }, state: "CHANGES_REQUESTED", submitted_at: "2026-07-15T09:00:00Z", commit_id: "abc123" },
+            { user: { id: 1 }, state: "APPROVED", submitted_at: "2026-07-15T09:30:00Z", commit_id: "abc123" },
           ],
           headers: {},
         };
@@ -52,6 +52,12 @@ function fakeClient(overrides: Partial<{
           data: { check_runs: [{ status: "completed", conclusion: "success" }] },
           headers: {},
         };
+      },
+    },
+    repos: {
+      getCombinedStatusForRef: async (input) => {
+        calls.push({ method: "repos.getCombinedStatusForRef", input });
+        return overrides.statuses ?? { data: { state: "pending", total_count: 0 }, headers: {} };
       },
     },
   };
@@ -109,6 +115,7 @@ test("GitHub adapter reads exact PR, check, and latest-review evidence without p
   assert.deepEqual(calls, [
     { method: "pulls.get", input: { owner: "owner", repo: "repo", pull_number: 5 } },
     { method: "checks.listForRef", input: { owner: "owner", repo: "repo", ref: "abc123", per_page: 100 } },
+    { method: "repos.getCombinedStatusForRef", input: { owner: "owner", repo: "repo", ref: "abc123", per_page: 100 } },
     { method: "pulls.listReviews", input: { owner: "owner", repo: "repo", pull_number: 5, per_page: 100 } },
   ]);
 });
@@ -166,27 +173,19 @@ test("delivery receipt accepts pending CI but requires commit, push, verificatio
   expectEvidenceError(() => validateDeliveryEvidence(claim(), { ...evidence, state: "closed" }), "pull_request_not_open");
 });
 
-test("protected lifecycle requires successful CI and current approval", () => {
-  const base = validateDeliveryEvidence(claim(), {
+test("protected lifecycle revalidates exact evidence, successful CI, and current approval", () => {
+  const evidence: GitHubPullRequestEvidence = {
     provider: "github", repositoryId: "owner/repo", pullRequestNumber: 5,
     state: "open", merged: false, updatedAt: "2026-07-15T10:00:00Z", observedAt: "2026-07-15T10:05:00Z",
     headRef: "feature", headSha: "abc123", headRepositoryId: "owner/repo",
     baseRef: "main", baseRepositoryId: "owner/repo", ciState: "success", reviewState: "approved",
-  });
-  assert.deepEqual(validateProtectedLifecycleEvidence(base), base);
-  expectEvidenceError(() => validateProtectedLifecycleEvidence({ ...base, headSha: "tampered" }), "receipt_invalid");
-  expectEvidenceError(() => validateProtectedLifecycleEvidence({ ...base, receiptHash: "0".repeat(64) }), "receipt_invalid");
-  const versionCore = { ...base, schemaVersion: 2 as const };
-  const { receiptHash: ignored, ...withoutHash } = versionCore;
-  const versionReceipt = { ...versionCore, receiptHash: createHash("sha256").update(JSON.stringify(withoutHash)).digest("hex") };
-  expectEvidenceError(() => validateProtectedLifecycleEvidence(versionReceipt as never), "receipt_invalid");
-  expectEvidenceError(() => validateProtectedLifecycleEvidence({ ...base, ciState: "failure" }), "receipt_invalid");
-  const pendingCi = validateDeliveryEvidence(claim(), { ...base, observedAt: base.providerObservedAt, state: "open", merged: false, headRef: base.branch, headRepositoryId: base.repositoryId, baseRepositoryId: base.repositoryId, updatedAt: "2026-07-15T10:00:00Z", ciState: "pending" });
-  expectEvidenceError(() => validateProtectedLifecycleEvidence(pendingCi), "ci_not_successful");
-  const changesRequested = validateDeliveryEvidence(claim(), { ...base, observedAt: base.providerObservedAt, state: "open", merged: false, headRef: base.branch, headRepositoryId: base.repositoryId, baseRepositoryId: base.repositoryId, updatedAt: "2026-07-15T10:00:00Z", reviewState: "changes_requested" });
-  expectEvidenceError(() => validateProtectedLifecycleEvidence(changesRequested), "review_not_approved");
-  const pendingReview = validateDeliveryEvidence(claim(), { ...base, observedAt: base.providerObservedAt, state: "open", merged: false, headRef: base.branch, headRepositoryId: base.repositoryId, baseRepositoryId: base.repositoryId, updatedAt: "2026-07-15T10:00:00Z", reviewState: "pending" });
-  expectEvidenceError(() => validateProtectedLifecycleEvidence(pendingReview), "review_not_approved");
+  };
+  assert.deepEqual(validateProtectedLifecycleEvidence(claim(), evidence), validateDeliveryEvidence(claim(), evidence));
+  expectEvidenceError(() => validateProtectedLifecycleEvidence(claim(), { ...evidence, headSha: "tampered" }), "claim_mismatch");
+  expectEvidenceError(() => validateProtectedLifecycleEvidence(claim(), { ...evidence, ciState: "failure" }), "ci_not_successful");
+  expectEvidenceError(() => validateProtectedLifecycleEvidence(claim(), { ...evidence, ciState: "pending" }), "ci_not_successful");
+  expectEvidenceError(() => validateProtectedLifecycleEvidence(claim(), { ...evidence, reviewState: "changes_requested" }), "review_not_approved");
+  expectEvidenceError(() => validateProtectedLifecycleEvidence(claim(), { ...evidence, reviewState: "pending" }), "review_not_approved");
 });
 
 test("provider derives pending, failure, unknown, and latest-review states", async () => {
@@ -206,22 +205,35 @@ test("provider derives pending, failure, unknown, and latest-review states", asy
     const { client } = fakeClient({ checks });
     assert.equal((await new GitHubEvidenceProvider(client).read({ owner: "owner", repo: "repo", pullRequestNumber: 5, observedAt: "2026-07-15T10:05:00Z" })).ciState, expected);
   }
+  for (const [statuses, expected] of [
+    [{ data: { state: "failure", total_count: 1 }, headers: {} }, "failure"],
+    [{ data: { state: "error", total_count: 1 }, headers: {} }, "failure"],
+    [{ data: { state: "pending", total_count: 1 }, headers: {} }, "pending"],
+    [{ data: { state: "success", total_count: 1 }, headers: {} }, "success"],
+  ] as const) {
+    const { client } = fakeClient({ checks: { data: { check_runs: [] }, headers: {} }, statuses });
+    assert.equal((await new GitHubEvidenceProvider(client).read({ owner: "owner", repo: "repo", pullRequestNumber: 5, observedAt: "2026-07-15T10:05:00Z" })).ciState, expected);
+  }
   const changed = fakeClient({ reviews: { data: [
-    { user: { id: 1 }, state: "APPROVED", submitted_at: "2026-07-15T09:00:00Z" },
-    { user: { id: 1 }, state: "CHANGES_REQUESTED", submitted_at: "2026-07-15T09:30:00Z" },
+    { user: { id: 1 }, state: "APPROVED", submitted_at: "2026-07-15T09:00:00Z", commit_id: "abc123" },
+    { user: { id: 1 }, state: "CHANGES_REQUESTED", submitted_at: "2026-07-15T09:30:00Z", commit_id: "abc123" },
   ], headers: {} } });
   assert.equal((await new GitHubEvidenceProvider(changed.client).read({ owner: "owner", repo: "repo", pullRequestNumber: 5, observedAt: "2026-07-15T10:05:00Z" })).reviewState, "changes_requested");
   const none = fakeClient({ reviews: { data: [], headers: {} } });
   assert.equal((await new GitHubEvidenceProvider(none.client).read({ owner: "owner", repo: "repo", pullRequestNumber: 5, observedAt: "2026-07-15T10:05:00Z" })).reviewState, "pending");
   const outOfOrder = fakeClient({ reviews: { data: [
-    { user: { id: 1 }, state: "APPROVED", submitted_at: "2026-07-15T09:30:00Z" },
-    { user: { id: 1 }, state: "CHANGES_REQUESTED", submitted_at: "2026-07-15T09:00:00Z" },
+    { user: { id: 1 }, state: "APPROVED", submitted_at: "2026-07-15T09:30:00Z", commit_id: "abc123" },
+    { user: { id: 1 }, state: "CHANGES_REQUESTED", submitted_at: "2026-07-15T09:00:00Z", commit_id: "abc123" },
   ], headers: {} } });
   assert.equal((await new GitHubEvidenceProvider(outOfOrder.client).read({ owner: "owner", repo: "repo", pullRequestNumber: 5, observedAt: "2026-07-15T10:05:00Z" })).reviewState, "approved");
+  const staleApproval = fakeClient({ reviews: { data: [
+    { user: { id: 1 }, state: "APPROVED", submitted_at: "2026-07-15T09:30:00Z", commit_id: "older-head" },
+  ], headers: {} } });
+  assert.equal((await new GitHubEvidenceProvider(staleApproval.client).read({ owner: "owner", repo: "repo", pullRequestNumber: 5, observedAt: "2026-07-15T10:05:00Z" })).reviewState, "pending");
   for (const reviews of [
-    [{ user: null, state: "APPROVED", submitted_at: "2026-07-15T09:00:00Z" }],
-    [{ user: { id: 1 }, state: "APPROVED", submitted_at: null }],
-    [{ user: { id: 1 }, state: "APPROVED", submitted_at: "invalid" }],
+    [{ user: null, state: "APPROVED", submitted_at: "2026-07-15T09:00:00Z", commit_id: "abc123" }],
+    [{ user: { id: 1 }, state: "APPROVED", submitted_at: null, commit_id: "abc123" }],
+    [{ user: { id: 1 }, state: "APPROVED", submitted_at: "invalid", commit_id: "abc123" }],
   ]) {
     const invalid = fakeClient({ reviews: { data: reviews, headers: {} } });
     await assert.rejects(() => new GitHubEvidenceProvider(invalid.client).read({ owner: "owner", repo: "repo", pullRequestNumber: 5, observedAt: "2026-07-15T10:05:00Z" }), (error: unknown) => error instanceof ProviderEvidenceError && error.code === "incomplete_evidence");
