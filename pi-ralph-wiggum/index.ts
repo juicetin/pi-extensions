@@ -7,7 +7,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import type { ClockCheckpoint } from "../incremental-delivery-guardian/clock.ts";
+import { foldClockEvents, measureCadence, type ClockCheckpoint, type ClockEvent } from "../incremental-delivery-guardian/clock.ts";
+import {
+	DEFAULT_GUARDIAN_POLICY,
+	GUARDIAN_OBSERVATION_EVENT,
+	GUARDIAN_REGISTRATION_EVENT,
+} from "../incremental-delivery-guardian/index.ts";
+import type { ScopeLedgerFacts } from "../incremental-delivery-guardian/ledger.ts";
+import type { ScopeFact } from "../incremental-delivery-guardian/scope.ts";
 import {
 	ProviderEvidenceError,
 	validateProtectedLifecycleEvidence,
@@ -256,6 +263,111 @@ export default function (pi: ExtensionAPI) {
 			.filter((s): s is LoopState => s !== null);
 	}
 
+	function emitGuardian(channel: string, data: unknown, ctx: ExtensionContext): void {
+		try {
+			pi.events.emit(channel, data);
+		} catch {
+			if (ctx.hasUI) ctx.ui.notify("Guardian telemetry publication unavailable.", "warning");
+		}
+	}
+
+	function guardianRegistration(state: LoopState, ctx: ExtensionContext) {
+		const repositoryId = sanitize(path.basename(ctx.cwd)) || "repository";
+		return {
+			schemaVersion: 1 as const,
+			registrationId: `ralph:${state.name}`,
+			repositoryId,
+			repositoryRoot: ctx.cwd,
+			ownerId: state.ownerSessionId!,
+			outcome: `Complete Ralph loop ${state.name}`,
+			acceptanceCriteria: ["Complete with exact verified delivery evidence"],
+			beadId: `ralph:${state.name}`,
+			branch: state.lastDelivery?.receipt.branch ?? "unverified",
+			baseRef: state.lastDelivery?.receipt.baseRef ?? "unverified",
+			domains: state.guardian.observedScope.domains.length > 0 ? [...state.guardian.observedScope.domains] : ["ralph"],
+			pathGroups: [{ name: "repository", roots: [ctx.cwd] }],
+			exclusions: [],
+			verificationPlan: ["Use ralph_done with structured provider evidence"],
+			riskClass: "policy_change" as const,
+			dependencies: [],
+		};
+	}
+
+	function scopeFact(state: LoopState): ScopeFact {
+		const observed = state.guardian.observedScope;
+		const expanded = observed.paths.length > 0 || observed.domains.length > 0;
+		return {
+			classification: expanded ? "ambiguous" : "in_scope",
+			reasonCode: expanded ? "missing_canonical_evidence" : "declared_scope",
+			evidence: {
+				kind: "path",
+				domain: observed.domains[0] ?? "ralph",
+				pathGroup: "repository",
+				requestedPaths: [...observed.paths],
+				canonicalPaths: [],
+			},
+		};
+	}
+
+	function ledgerFacts(state: LoopState): ScopeLedgerFacts {
+		const microItems = state.guardian.observedScope.paths.length;
+		return {
+			supportMinutes: { value: 0, threshold: DEFAULT_GUARDIAN_POLICY.scopeLedger.maxUnplannedMs / 60_000, reached: false },
+			microItems: { value: microItems, threshold: DEFAULT_GUARDIAN_POLICY.scopeLedger.maxMicroItems, reached: microItems >= DEFAULT_GUARDIAN_POLICY.scopeLedger.maxMicroItems },
+		};
+	}
+
+	function observeGuardian(state: LoopState, ctx: ExtensionContext, phase: "started" | "settled"): void {
+		try {
+			const ownerSessionId = sessionId(ctx);
+			if (!ownerSessionId || ownerSessionId !== state.ownerSessionId) throw new Error("owner_unavailable");
+			const now = Date.now();
+			const activityId = `iteration:${state.iteration}`;
+			const openActivities = state.guardian.clockCheckpoint?.openActivities ?? [];
+			const open = openActivities.some((activity) => activity.activityId === activityId);
+			const kind = phase === "started" ? (open ? "heartbeat" : "started") : (open ? "settled" : "observed");
+			const event = {
+				kind,
+				ownerSessionId,
+				timelineId: state.guardian.timelineId,
+				monotonicMs: now,
+				wallMs: now,
+				activityId,
+			} as ClockEvent;
+			const snapshot = foldClockEvents({
+				ownerSessionId,
+				timelineId: state.guardian.timelineId,
+				wallStartedAtMs: state.guardian.wallStartedAtMs,
+				checkpoint: state.guardian.clockCheckpoint,
+				events: [event],
+				heartbeatGraceMs: 60_000,
+				maxWallSkewMs: 5_000,
+			});
+			state.guardian.clockCheckpoint = snapshot.checkpoint;
+			saveState(ctx, state);
+			emitGuardian(GUARDIAN_OBSERVATION_EVENT, {
+				registrationId: `ralph:${state.name}`,
+				observationId: `${state.name}:${state.iteration}:${phase}:${now}`,
+				cadence: measureCadence(snapshot, DEFAULT_GUARDIAN_POLICY),
+				scope: scopeFact(state),
+				ledger: ledgerFacts(state),
+			}, ctx);
+		} catch {
+			emitGuardian(GUARDIAN_OBSERVATION_EVENT, {
+				registrationId: `ralph:${state.name}`,
+				observationId: `${state.name}:${state.iteration}:${phase}:unavailable`,
+				cadence: { available: false, anomalies: [] },
+				scope: scopeFact(state),
+				ledger: ledgerFacts(state),
+				componentIssues: [{ component: "ralph_adapter", code: "observation_unavailable" }],
+			}, ctx);
+		}
+	}
+
+	function queueGuardianRegistration(state: LoopState, ctx: ExtensionContext): void {
+		queueMicrotask(() => emitGuardian(GUARDIAN_REGISTRATION_EVENT, guardianRegistration(state, ctx), ctx));
+	}
+
 	// --- Loop state transitions ---
 
 	function pauseLoop(ctx: ExtensionContext, state: LoopState, message?: string): void {
@@ -440,6 +552,7 @@ export default function (pi: ExtensionAPI) {
 			saveState(ctx, state);
 			currentLoop = loopName;
 			updateUI(ctx);
+			queueGuardianRegistration(state, ctx);
 
 			const content = tryRead(fullPath);
 			if (!content) {
@@ -497,6 +610,7 @@ export default function (pi: ExtensionAPI) {
 			saveState(ctx, state);
 			currentLoop = loopName;
 			updateUI(ctx);
+			queueGuardianRegistration(state, ctx);
 
 			ctx.ui.notify(`Resumed: ${loopName} (iteration ${state.iteration})`, "info");
 
@@ -763,6 +877,7 @@ Examples:
 			saveState(ctx, state);
 			currentLoop = loopName;
 			updateUI(ctx);
+			queueGuardianRegistration(state, ctx);
 
 			pi.sendUserMessage(buildPrompt(state, params.taskContent, false), { deliverAs: "followUp" });
 
@@ -876,6 +991,7 @@ Examples:
 		if (!currentLoop) return;
 		const state = loadState(ctx, currentLoop);
 		if (!state || state.status !== "active") return;
+		observeGuardian(state, ctx, "started");
 
 		const iterStr = `${state.iteration}${state.maxIterations > 0 ? `/${state.maxIterations}` : ""}`;
 
@@ -899,6 +1015,7 @@ Examples:
 		if (!currentLoop) return;
 		const state = loadState(ctx, currentLoop);
 		if (!state || state.status !== "active") return;
+		observeGuardian(state, ctx, "settled");
 
 		// Check for completion marker
 		const lastAssistant = [...event.messages].reverse().find((m) => m.role === "assistant");
@@ -933,6 +1050,11 @@ Examples:
 				return candidateMtime > bestMtime ? candidate : best;
 			});
 			currentLoop = mostRecent.name;
+		}
+
+		if (currentLoop) {
+			const state = loadState(ctx, currentLoop);
+			if (state) queueGuardianRegistration(state, ctx);
 		}
 
 		if (active.length > 0 && ctx.hasUI) {
