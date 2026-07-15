@@ -6,6 +6,14 @@
   "keywords": [
     "pi-package"
   ],
+  "scripts": {
+    "test:guardian": "node --experimental-strip-types --test incremental-delivery-guardian/*.test.ts",
+    "typecheck:guardian": "npx --yes --package=typescript@5.8.3 tsc -p incremental-delivery-guardian/tsconfig.json",
+    "mutation:guardian:g1": "npm run mutation:guardian:g1:config && npm run mutation:guardian:g1:schemas && npm run mutation:guardian:g1:contracts",
+    "mutation:guardian:g1:config": "npx --yes --package=@stryker-mutator/core@9.6.1 stryker run stryker.guardian-g1.config.mjs",
+    "mutation:guardian:g1:schemas": "GUARDIAN_MUTATE_SCHEMA_STRINGS=1 npx --yes --package=@stryker-mutator/core@9.6.1 stryker run stryker.guardian-g1.config.mjs --mutate incremental-delivery-guardian/schemas.ts",
+    "mutation:guardian:g1:contracts": "npx --yes --package=@stryker-mutator/core@9.6.1 stryker run stryker.guardian-g1.config.mjs --mutate incremental-delivery-guardian/contracts.ts"
+  },
   "pi": {
     "extensions": [
       "./agent-guidance/agent-guidance.ts",
@@ -39,5 +47,8 @@
     "@earendil-works/pi-ai": "^0.80.3",
     "@earendil-works/pi-coding-agent": "^0.80.3",
     "@earendil-works/pi-tui": "^0.80.3"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "0.34.41"
   }
 }

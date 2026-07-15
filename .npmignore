@@ -3,6 +3,19 @@
 .long-task-harness/
 .build/
 .research/
+.beads/
+.agents/
+.claude/
+.codex/
+.pi/
+.pi-subagents/
+AGENTS.md
+CLAUDE.md
+
+# Guardian development-only evidence
+stryker.guardian-*.config.mjs
+incremental-delivery-guardian/*.test.ts
+incremental-delivery-guardian/tsconfig.json
 
 # Unrelated extensions for npm root package
 control/
