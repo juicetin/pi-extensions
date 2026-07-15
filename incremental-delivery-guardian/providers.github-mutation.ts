@@ -1,12 +1,12 @@
 import { Octokit } from "octokit";
 import type { RiskClass } from "./schemas.ts";
-import type { DeliveryClaim, GitHubPullRequestEvidence } from "./provider.ts";
+import type { DeliveryClaim, ProviderPullRequestEvidence } from "./provider.ts";
 import { createGitHubOctokitOptions, validateProtectedLifecycleEvidence } from "./provider.ts";
 import type { SensitiveActionAuthorization, SensitiveActionConsumption } from "./decisions.ts";
 import { validateSensitiveActionAuthorization } from "./decisions.ts";
 
 export interface DescendantMaintenanceRequest { readonly pullRequestNumber:number; readonly headSha:string; readonly baseRef:string; readonly receiptHash:string }
-export interface GitHubMergeRequest { readonly claim:DeliveryClaim; readonly evidence:GitHubPullRequestEvidence; readonly now:string; readonly riskClass?:RiskClass; readonly authorization?:SensitiveActionAuthorization; readonly consumedAuthorizationIds?:readonly string[]; readonly consumedNonces?:readonly string[]; readonly descendants:readonly DescendantMaintenanceRequest[] }
+export interface ProviderMergeRequest { readonly claim:DeliveryClaim; readonly evidence:ProviderPullRequestEvidence; readonly now:string; readonly riskClass?:RiskClass; readonly authorization?:SensitiveActionAuthorization; readonly consumedAuthorizationIds?:readonly string[]; readonly consumedNonces?:readonly string[]; readonly descendants:readonly DescendantMaintenanceRequest[] }
 export interface GitHubMutationClient {
   merge(input:{repositoryId:string;pullRequestNumber:number;expectedHeadSha:string}):Promise<{merged:boolean;sha:string}>;
   retarget(input:{repositoryId:string;pullRequestNumber:number;newBaseRef:string;expectedHeadSha:string}):Promise<void>;
@@ -29,16 +29,16 @@ export interface MergeDependencies {
   consume(consumption:SensitiveActionConsumption):Promise<void>;
   verify(input:{repositoryId:string;pullRequestNumber:number;headSha:string;baseRef:string;invalidatedReceiptHash:string}):Promise<{verificationId:string;completedAt:string}>;
 }
-export interface GitHubMergeResult { readonly mergeSha:string; readonly receiptHash:string; readonly descendants:readonly {pullRequestNumber:number;oldHeadSha:string;newHeadSha:string;newBaseRef:string;invalidatedReceiptHash:string;verificationId:string}[] }
+export interface ProviderMergeResult { readonly mergeSha:string; readonly receiptHash:string; readonly descendants:readonly {pullRequestNumber:number;oldHeadSha:string;newHeadSha:string;newBaseRef:string;invalidatedReceiptHash:string;verificationId:string}[] }
 
 const allowed=new Set(["claim","evidence","now","riskClass","authorization","consumedAuthorizationIds","consumedNonces","descendants"]);
-function validateShape(input:GitHubMergeRequest):void{
+function validateShape(input:ProviderMergeRequest):void{
  if(!input||typeof input!=="object"||Object.keys(input).some(k=>!allowed.has(k))||!Array.isArray(input.descendants))throw new Error("merge_request_invalid");
  if(new Set(input.descendants.map(d=>d.pullRequestNumber)).size!==input.descendants.length)throw new Error("merge_request_invalid");
  for(const d of input.descendants)if(!Number.isSafeInteger(d.pullRequestNumber)||d.pullRequestNumber<=0||!d.headSha||!d.baseRef||!d.receiptHash)throw new Error("merge_request_invalid");
 }
 
-export async function executeGitHubMerge(input:GitHubMergeRequest,deps:MergeDependencies):Promise<GitHubMergeResult>{
+export async function executeProviderMerge(input:ProviderMergeRequest,deps:MergeDependencies):Promise<ProviderMergeResult>{
  validateShape(input);
  const receipt=validateProtectedLifecycleEvidence(input.claim,input.evidence);
  if(input.riskClass===undefined){
@@ -62,3 +62,4 @@ export async function executeGitHubMerge(input:GitHubMergeRequest,deps:MergeDepe
  }
  return {mergeSha:merged.sha,receiptHash:receipt.receiptHash,descendants};
 }
+export const executeGitHubMerge=executeProviderMerge;
