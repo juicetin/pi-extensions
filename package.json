@@ -49,6 +49,7 @@
     "@earendil-works/pi-tui": "^0.80.3"
   },
   "dependencies": {
-    "@sinclair/typebox": "0.34.41"
+    "@sinclair/typebox": "0.34.41",
+    "octokit": "5.0.5"
   }
 }
