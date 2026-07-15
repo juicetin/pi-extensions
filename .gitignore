@@ -6,3 +6,10 @@ control/
 review/
 node_modules/
 package-lock.json
+
+# Beads / Dolt runtime and managed worktrees
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+.worktrees/
