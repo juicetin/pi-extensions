@@ -43,8 +43,9 @@ You ask Pi to set up a ralph-wiggum loop.
   3. How often to commit
   4. (optionally) After how many items it should take a step back and self-reflect
 - Pi runs `ralph_start`, beginning iteration 1.
-  - It gets a prompt telling it to work on the task, update the task file, and call ralph_done when it finishes that iteration
-  - When the iteration is done, it calls `ralph_done`, resending the same prompt*
+  - It gets a prompt telling it to work on the task, update the task file, and call `ralph_done` when it finishes that iteration.
+  - Iterations with meaningful code changes run the packaged `code-simplifier` skill after a passing targeted check, then repeat the same check and record the evidence before `ralph_done`.
+  - When the iteration is done, it calls `ralph_done`, resending the same prompt.*
 - Pi runs until either:
   - All tasks are done and final verification is externally rerunnable (Pi sends `<promise>COMPLETE</promise>`)
   - Max iterations (default 50)
@@ -52,6 +53,8 @@ You ask Pi to set up a ralph-wiggum loop.
 If you hit `esc`, you can run `/ralph-stop` to clear the loop. Alternatively, just tell Pi to continue to keep going.
 
 ## Completion gate
+
+The simplification pass is structural and risk based. It applies only to code owned by the current iteration and fails clearly when scope, validation, or the skill is unavailable. Documentation, formatting, generated files, simple configuration, and trivial one-line edits do not load the full skill.
 
 For build/test/refactor tasks, Ralph prompts the agent not to complete based only on checked checklist items. Before sending `<promise>COMPLETE</promise>`, the agent should:
 

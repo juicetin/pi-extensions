@@ -26,6 +26,21 @@ ralph_start({
 5. Before outputting `<promise>COMPLETE</promise>`, run a final verification command that an external monitor can rerun from the same worktree.
 6. Stop when complete or when max iterations is reached (default 50).
 
+## Code Simplification Before `ralph_done`
+
+When an iteration changes meaningful code structure or behavior, load and follow the `code-simplifier` Agent Skill after the implementation has a passing targeted check and before calling `ralph_done`. Meaningful changes include logic, control flow, APIs, state transitions, error handling, or several related files.
+
+- Fix the scope to changes owned by the current iteration. Do not include pre-existing or unrelated worktree changes.
+- Reuse the fresh passing targeted command as the before-edit baseline.
+- Let the skill apply only safe local simplifications. A no-op is valid.
+- Rerun the same command after simplification.
+- Record the scope, baseline, applied changes or no-op, deferred suggestions, and repeated validation result in `.ralph/<name>.md`.
+- If task-owned scope is unclear, meaningful validation is unavailable, or `code-simplifier` cannot be loaded, stop and report the blocker. Do not substitute an inline or best-effort cleanup process.
+
+Skip the full skill for documentation, formatting, generated files, simple configuration, and trivial one-line changes. These receive only the normal direct self-check.
+
+The simplification pass does not replace the iteration's tests or Ralph's final externally rerunnable verification.
+
 ## Completion Gate
 
 For build/test/refactor tasks, do not mark complete based only on checked checklist items.
