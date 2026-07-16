@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Run the packaged `code-simplifier` skill before `ralph_done` when an iteration changes meaningful code, with fixed task-owned scope and repeated validation evidence.
+
 ## [0.2.2] - 2026-07-04
 
 ### Changed
