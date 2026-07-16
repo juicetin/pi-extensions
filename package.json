@@ -23,6 +23,7 @@
       "./usage-extension/index.ts"
     ],
     "skills": [
+      "./code-simplifier/SKILL.md",
       "./extending-pi/SKILL.md",
       "./extending-pi/skill-creator/SKILL.md",
       "./pi-ralph-wiggum/SKILL.md"
