@@ -3,6 +3,15 @@
 .long-task-harness/
 .build/
 .research/
+.beads/
+.agents/
+.claude/
+.codex/
+.pi/
+.pi-subagents/
+**/node_modules/
+AGENTS.md
+CLAUDE.md
 
 # Unrelated extensions for npm root package
 control/
