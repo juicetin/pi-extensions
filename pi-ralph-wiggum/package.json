@@ -27,10 +27,6 @@
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.80.3",
-    "@sinclair/typebox": "^0.34.50"
-  },
-  "scripts": {
-    "test": "node --experimental-strip-types tests/session-boundary.test.mjs"
+    "@earendil-works/pi-coding-agent": "^0.80.3"
   }
 }

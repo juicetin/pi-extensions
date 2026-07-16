@@ -46,9 +46,3 @@ Thanks to @jorgecurious for contributing the completion gate, follow-up delivery
 
 ## 0.1.0 - 2026-01-13
 - Initial release.
-
-## Unreleased
-
-- Document advisory cadence and scope observations across start, resume, and rehydrate.
-- Clarify that `ralph_done` and completion still require exact owner and structured delivery evidence.
-- Record that advisory component failure is visible and does not alter implementation mutation.
