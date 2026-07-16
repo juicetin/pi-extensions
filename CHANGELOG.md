@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Add the packaged `code-simplifier` Agent Skill with task-owned scope, before-and-after validation, selective upstream provenance, and an explicit read-only update checker.
+
 ## [0.1.42] - 2026-05-13
 
 ### Changed
