@@ -26,9 +26,11 @@
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },
-  "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.80.3",
+  "dependencies": {
     "@sinclair/typebox": "^0.34.50"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.80.3"
   },
   "scripts": {
     "test": "node --experimental-strip-types tests/session-boundary.test.mjs"

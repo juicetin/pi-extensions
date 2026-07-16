@@ -108,11 +108,3 @@ Based on Geoffrey Huntley's Ralph Wiggum approach for long-running agent tasks.
 ## Changelog
 
 See `CHANGELOG.md`.
-
-## Advisory delivery observations
-
-Ralph persists owner-bound cadence, wall-time, scope, and ledger facts across start, rehydrate, and explicit resume. The 3, 4, and 6 active-hour checkpoints and 12 and 24 wall-hour checkpoints produce facts and nudges. Scope expansion can request review. None of these observations increments an iteration, blocks a prompt, changes a mutation, or completes a loop.
-
-`ralph_done` remains a hard lifecycle transition. It requires the exact session owner and a structured delivery receipt bound to the pushed commit, open PR, immutable head/base, local verification, fresh provider evidence, successful required CI, and current exact-head approval. Resume does not manufacture any of that evidence.
-
-Reviewer, clock, classifier, advisory audit, or optional provider-display failure is recorded as unavailable or incomplete. It does not weaken receipt validation. Existing state migrates into the versioned owner/timeline/clock/scope shape without creating progress.
