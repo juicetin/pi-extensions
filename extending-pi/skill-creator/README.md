@@ -7,9 +7,11 @@ Guidelines and templates for creating Agent Skills that follow the Agent Skills 
 
 ## Validator script
 
-`scripts/validate_skill.py` uses a [PEP 723](https://peps.python.org/pep-0723/) `uv run --script` shebang so PyYAML is provisioned in an ephemeral environment — no system-wide Python packages required.
+`README.md` is optional. If a skill includes it, `scripts/validate_skill.py` requires non-empty content and an Installation section.
 
-Prerequisite: install [`uv`](https://docs.astral.sh/uv/getting-started/installation/) (e.g. `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`), then:
+The script uses a [PEP 723](https://peps.python.org/pep-0723/) `uv run --script` shebang. `uv` provisions PyYAML without system-wide Python packages.
+
+Prerequisite: install [`uv`](https://docs.astral.sh/uv/getting-started/installation/) (for example, `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`), then:
 
 ```bash
 scripts/validate_skill.py /path/to/my-skill

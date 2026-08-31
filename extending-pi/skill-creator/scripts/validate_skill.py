@@ -4,7 +4,7 @@
 # dependencies = ["pyyaml>=6"]
 # ///
 """
-Validate an Agent Skill directory for Agent Skills + README requirements.
+Validate an Agent Skill directory and any optional README.
 
 Usage:
   scripts/validate_skill.py <skill_directory>
@@ -67,7 +67,7 @@ def validate_readme(readme_path: Path) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
 
     if not readme_path.exists():
-        return ["README.md not found"], warnings
+        return errors, warnings
 
     content = readme_path.read_text().strip()
     if not content:
