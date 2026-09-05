@@ -1,0 +1,128 @@
+{
+  "recording": "docs/pr-assets/align-skill-creator-readme-validation/skill-creator-change-walkthrough.webm",
+  "sizeBytes": 9557189,
+  "opencvVersion": "4.10.0",
+  "ocrEngine": "tesseract --oem 3 --psm 11 after OpenCV grayscale, 2x upscale, and Otsu threshold",
+  "ffprobe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "vp9",
+        "width": 1440,
+        "height": 1000,
+        "avg_frame_rate": "30/1"
+      }
+    ],
+    "format": {
+      "duration": "50.000000",
+      "size": "9557189"
+    }
+  },
+  "video": {
+    "width": 1440,
+    "height": 1000,
+    "fps": 30.0,
+    "frameCount": 1500,
+    "durationSeconds": 50.0,
+    "samples": [
+      {
+        "frame": 0,
+        "seconds": 0.0
+      },
+      {
+        "frame": 79,
+        "seconds": 2.633
+      },
+      {
+        "frame": 158,
+        "seconds": 5.267
+      },
+      {
+        "frame": 237,
+        "seconds": 7.9
+      },
+      {
+        "frame": 316,
+        "seconds": 10.533
+      },
+      {
+        "frame": 394,
+        "seconds": 13.133
+      },
+      {
+        "frame": 473,
+        "seconds": 15.767
+      },
+      {
+        "frame": 552,
+        "seconds": 18.4
+      },
+      {
+        "frame": 631,
+        "seconds": 21.033
+      },
+      {
+        "frame": 710,
+        "seconds": 23.667
+      },
+      {
+        "frame": 789,
+        "seconds": 26.3
+      },
+      {
+        "frame": 868,
+        "seconds": 28.933
+      },
+      {
+        "frame": 947,
+        "seconds": 31.567
+      },
+      {
+        "frame": 1026,
+        "seconds": 34.2
+      },
+      {
+        "frame": 1105,
+        "seconds": 36.833
+      },
+      {
+        "frame": 1183,
+        "seconds": 39.433
+      },
+      {
+        "frame": 1262,
+        "seconds": 42.067
+      },
+      {
+        "frame": 1341,
+        "seconds": 44.7
+      },
+      {
+        "frame": 1420,
+        "seconds": 47.333
+      },
+      {
+        "frame": 1499,
+        "seconds": 49.967
+      }
+    ]
+  },
+  "expectedText": [
+    "README guidance",
+    "README.md not found",
+    "Skill is valid",
+    "Video chapter breakdown",
+    "Chronological screenshot timeline"
+  ],
+  "missingExpectedText": [],
+  "forbiddenText": [
+    "AKIA",
+    "Bearer"
+  ],
+  "foundForbiddenText": [],
+  "foundUuids": [],
+  "foundSensitivePatterns": [],
+  "status": "passed",
+  "failures": []
+}

@@ -22,7 +22,7 @@
 
 ## 5. Visual review evidence
 
-- [ ] 5.1 Create a light, self-contained HTML breakdown of the before state, optional-README correction, present-file recovery, validation flow, and evidence scope.
-- [ ] 5.2 Capture desktop and narrow screenshots plus a short chaptered video from the committed documentation revision.
-- [ ] 5.3 Validate the final HTML, screenshots, and video with browser diagnostics, OpenCV, OCR, and media metadata checks.
+- [x] 5.1 Create a light, self-contained HTML breakdown of the before state, optional-README correction, present-file recovery, validation flow, and evidence scope.
+- [x] 5.2 Capture desktop and narrow screenshots plus a short chaptered video from the committed documentation revision.
+- [x] 5.3 Validate the final HTML, screenshots, and video with browser diagnostics, OpenCV, OCR, and media metadata checks.
 - [ ] 5.4 Obtain a fresh independent review of the exact evidence files, fix confirmed defects, update PR #26 with commit-pinned links, then push and close Bead `piext-4za` again.

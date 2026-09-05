@@ -1,0 +1,90 @@
+{
+  "status": "passed",
+  "sourceRevision": "ae2cf8cc6b80aa6f575cff614af82cedb1275993",
+  "opencvVersion": "4.10.0",
+  "tesseractVersion": "tesseract 5.5.0",
+  "ocrMethod": "OpenCV grayscale, 2x cubic upscale, Otsu threshold; Tesseract --oem 3 --psm 11",
+  "html": {
+    "path": "docs/pr-assets/align-skill-creator-readme-validation/change-breakdown.html",
+    "sizeBytes": 585600,
+    "selfContainedImageCount": 3,
+    "hasExternalStylesheet": false,
+    "hasAllSections": true,
+    "hasVideoLink": true,
+    "hasRevision": true,
+    "hasChapterLinks": true
+  },
+  "images": [
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/change-breakdown-desktop.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 145723,
+      "expectedText": [
+        "README guidance now",
+        "bundled validator",
+        "old guidance"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "BREAKDOWN 1. Mismatch PR 26 BEAD PIEXT-42A CHANGE EVIDENCE 2. Guidance 3. Validation README guidance now 4, Scope 5. Video matches the bundled 6. Screenshots validator. The skill used to call README. md optional. Its validator rejects a missing README and rejects a README without an Installation heading. The guidance now states those requirements before validation and gives an exact recovery check. source revision ae2cfacc\u00e9bseaabfs7scffei4afea2cedb1275993 1 2 0 canonical guidance file changed reproduced validator failures decumented validator behavior changes O1 The old guidance contradicted the validator. Auser could follow the documented file tree, omit README .md, and then fail the bundled validation step. BEFORE DOCUMENTED EXPECTATION OBSERVED VALIDATOR CONTRACT The bundled validator exits with an error when the \u201cREADME. md - Optional: human summary + installation\u201d README is absent or has no Installation heading."
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/change-breakdown-narrow.png",
+      "width": 390,
+      "height": 844,
+      "sizeBytes": 60760,
+      "expectedText": [
+        "README",
+        "bundled validator",
+        "source revision"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "1. Mismatch 2. Guidance 3. Validation 4, Scope 5. Vide PR 26 BEAD PIEXT-4ZA CHANGE EVIDENCE README uidance now matches the bundled validator. The skill used to call README .md optional Its validator rejects a missing README and rejects a README without an Installation heading. The guidance now states those requirements before validation and gives an exact recovery check. source revision ae2c fecc\u00e9bseaa6f575cff614afs82cedb1275993 1 canonical guidance file changed 2 reproduced validator failures documented"
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/checkpoint-1-mismatch.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 135492,
+      "expectedText": [
+        "old guidance",
+        "README.md not found",
+        "Installation section"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "BREAKDOWN source revision ae2cfacc\u00e9bseaaGfS75c fF6 l4afe2cedbi2z75993 1, Mismatch 2 . Guidance 5 1 2 0 3 . \u00a5aldation canonical ce file changed reproduced vaidacor falures ccumnented yaidalor oehaviar ch Y 4 . Scope 5 . Video 6 . Screenshots 01 The old guidance contradicted the validator. Auser could follow the documented file tree, omit README .md, and then fail the bundled validation step. BEFORE DOCUMENTED EXPECTATION OBSERVED VALIDATOR CONTRACT \u201cREADME.md - Optional: human summary The bundled validator exits with an error when the + installation\u201d README is absent or has no Installation heading. README .md Errors: Optional README.md not found Step 4: Optio Write README .md Errors: REAOME.md is missing an Installation section The workflove implied Haat yvalidatian could pay: itmout the fre. Both case\u00bb were reproduced with temporary fixture skis and exct status 1 02 The fix puts requirements where they are needed. The patch changes the file tee. README step. and validation recovery. It also separates this package rule from the wider Agent Skills format. README is required for bundled validation FILE TREE"
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/checkpoint-2-guidance.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 140673,
+      "expectedText": [
+        "fix puts requirements",
+        "README is required",
+        "Recover from exact error"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "README .md Optional Errors: README.md not found BREAKDOWN Step 4: Optional: Write README .md Errors: 1. Mismatch REAOME.md is missing an Installation section The workflow implied Maat validation could pass without the fre. Guidance 3 Val:dation Both case\u00bb were reproduced with temporary fixture skis and ex:t status 1 Scope 5 Video Screenshots O2 The fix puts requirements where they are needed. The patch changes the file tee. README step. and validation recovery. It also separates this package rule from the wider Agent Skills format. README is required for bundled validation FILE TREE The tree now labels README .md as the human summary and installation file expected by this validator. Create a non-empty README with Installation STEP 4 The instruction appears before the validator runs. It states that the Agent Skills format itself still requires only SKILL. md. Recover from exact error output STEP 8 When either reproduced error appears, create or correct the README and rerun until the validator prints Skill is valid!. 03 The documented path now reaches a passing result. The proof runs the two failing fixtures first, then validates a corrected fixture and the canonical skill package."
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/checkpoint-3-validation.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 148030,
+      "expectedText": [
+        "documented path",
+        "README corrected",
+        "Skill is valid"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "Create a non-empty README with Installation BREAKDOWN STEP 4 The instruction appears before the validator runs. It states that the Agent Skills format itself still requires only 1. Mismatch SKILL. md. 2. Guidance 3. Val:dation Recover from exact error output 4. Scope STEP 6 When either reproduced error appears, create or correct the README and rerun until the validator prints Skill is 5. Video valid!. 6. Screenshot 03 The documented path now reaches a passing result. The proof runs the two failing fixtures first, then validates a corrected fixture and the canonical skill package. EXIT 1 EXIT 1 EXIT oO README absent Installation absent README corrected READNE md not found READNE.md is missing an Non-empty summary plus Installation section Installation $& python3 extending-pi/skill-creator/scripts/validate_skill.py extending-pi/skill-creator Skill is valid! $ openspec validate align- skill-creator-readme-validation -strict Change \u2018align-skill-creator-readme-validation\u2019 is valid O04 The delivery stays inside the confirmed repair. Changed Not changed \u00ab extending-pi/skill-creator/SKILL.md \u00a2 Validator implementation \u00a2 Repository-local OpenSpec records \u00a2 Dependencies or runtime APIs e Review evidence for PR 26 e Publishing, deployment, installation, or"
+    }
+  ],
+  "failures": []
+}
