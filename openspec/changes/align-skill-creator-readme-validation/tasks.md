@@ -14,3 +14,8 @@
 - [x] 3.2 Run strict OpenSpec validation and the relevant repository checks, then review the final task-owned diff for spec compliance and regressions.
 - [x] 3.3 Verify no installed global skill copy changed; if a future sync is needed, leave it out of this repository change unless the global fresh-Pi startup gate can be completed.
 - [x] 3.4 Document recovery for an empty README or a README without an Installation section, and verify the guidance names `Skill is valid!` as the completion output.
+
+## 4. Branch review and delivery
+
+- [x] 4.1 Review the task-owned diff against the Bead and OpenSpec requirements; verify no unrelated behavior or repository changes are included.
+- [x] 4.2 Commit and push `bd-piext-4za`, open the user-owned repository pull request, attach verification evidence to Bead `piext-4za`, close it, and verify Beads synchronization succeeds.
