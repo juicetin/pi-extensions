@@ -53,7 +53,7 @@ Use `.agents/skills/` when you want the same skill directory to be naturally dis
 
 ### 4) Optional: Write README.md (humans + installation)
 
-If you plan to share the skill with humans, a README.md helps discovery and installation. If you have a README, installation info can live there to save space in SKILL.md.
+If you plan to share the skill with humans, a README.md helps discovery and installation. If you include it, add non-empty summary text followed by an `## Installation` section so the bundled validator accepts it.
 
 ```markdown
 # My Skill
@@ -106,6 +106,7 @@ scripts/validate_skill.py /path/to/my-skill
 uv run scripts/validate_skill.py /path/to/my-skill
 ```
 
+- If validation reports `README.md is empty` or `README.md is missing an Installation section`, correct the optional README as described in step 4, then rerun the validator. Validation is complete when it prints `Skill is valid!`.
 - Load only the skill in Pi to spot warnings:
 
 ```bash

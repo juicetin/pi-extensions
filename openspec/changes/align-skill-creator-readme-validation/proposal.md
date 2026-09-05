@@ -7,7 +7,7 @@ The skill-creator guidance documents `README.md` as optional, but its validator 
 - Accept an Agent Skill without `README.md` when its required `SKILL.md` is valid.
 - Keep the current README content checks when `README.md` exists, including the required Installation section.
 - Add deterministic fixtures and tests for the no-README case and the documented README case.
-- Clarify the validator documentation and record the behavior change.
+- Clarify the validator documentation, document recovery for present-README errors and the successful completion output, and record the behavior change.
 
 ## Capabilities
 

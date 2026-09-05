@@ -8,6 +8,7 @@ The validator is a standalone Python script with a PEP 723 dependency declaratio
 
 **Goals:**
 - Keep README validation strict when the optional file exists.
+- Make present-README validation failures actionable and name the successful completion output.
 - Exercise validator behavior through committed skill-directory fixtures.
 - Use the Python standard library for tests and keep PyYAML provisioned through `uv`.
 
@@ -26,7 +27,7 @@ Alternative: guard the call in `validate_skill`. This would also work, but it wo
 
 ### Preserve checks for every present README
 
-Empty content, a missing Installation heading, and missing summary text keep their current error or warning levels. Making README optional does not weaken validation for authors who add the file.
+Empty content, a missing Installation heading, and missing summary text keep their current error or warning levels. Making README optional does not weaken validation for authors who add the file. The guidance names the two present-file errors, directs correction and rerun, and uses `Skill is valid!` as the completion check.
 
 Alternative: remove README validation. This would accept documented but unusable installation guidance and exceeds the bug's scope.
 

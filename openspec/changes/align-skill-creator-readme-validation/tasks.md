@@ -13,3 +13,4 @@
 - [x] 3.1 Clarify the validator's optional README behavior in the skill guidance and package README, update the changelog, and verify the documents agree with the spec.
 - [x] 3.2 Run strict OpenSpec validation and the relevant repository checks, then review the final task-owned diff for spec compliance and regressions.
 - [x] 3.3 Verify no installed global skill copy changed; if a future sync is needed, leave it out of this repository change unless the global fresh-Pi startup gate can be completed.
+- [x] 3.4 Document recovery for an empty README or a README without an Installation section, and verify the guidance names `Skill is valid!` as the completion output.
