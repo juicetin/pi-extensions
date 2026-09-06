@@ -1,6 +1,7 @@
 {
   "recording": "docs/pr-assets/align-skill-creator-readme-validation/skill-creator-change-walkthrough.webm",
-  "sizeBytes": 9557189,
+  "sourceRevision": "3803871af2f3c0554ce3aa9a97ecfb6767a15941",
+  "sizeBytes": 1638018,
   "opencvVersion": "4.10.0",
   "ocrEngine": "tesseract --oem 3 --psm 11 after OpenCV grayscale, 2x upscale, and Otsu threshold",
   "ffprobe": {
@@ -16,7 +17,7 @@
     ],
     "format": {
       "duration": "50.000000",
-      "size": "9557189"
+      "size": "1638018"
     }
   },
   "video": {
@@ -109,16 +110,19 @@
     ]
   },
   "expectedText": [
-    "README guidance",
-    "README.md not found",
+    "README stays optional",
+    "README.md is empty",
     "Skill is valid",
     "Video chapter breakdown",
-    "Chronological screenshot timeline"
+    "Chronological screenshot timeline",
+    "PR 26 stays additive"
   ],
   "missingExpectedText": [],
   "forbiddenText": [
     "AKIA",
-    "Bearer"
+    "Bearer",
+    "UUID",
+    "credential assignment"
   ],
   "foundForbiddenText": [],
   "foundUuids": [],
