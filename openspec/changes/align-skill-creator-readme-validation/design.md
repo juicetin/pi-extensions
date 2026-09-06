@@ -8,8 +8,10 @@ The validator is a standalone Python script with a PEP 723 dependency declaratio
 
 **Goals:**
 - Keep README validation strict when the optional file exists.
+- Make present-README validation failures actionable and name the successful completion output.
 - Exercise validator behavior through committed skill-directory fixtures.
 - Use the Python standard library for tests and keep PyYAML provisioned through `uv`.
+- Give reviewers an HTML breakdown, readable screenshots, and a short chaptered video.
 
 **Non-Goals:**
 - Change frontmatter validation or Pi's Agent Skill loading behavior.
@@ -26,7 +28,7 @@ Alternative: guard the call in `validate_skill`. This would also work, but it wo
 
 ### Preserve checks for every present README
 
-Empty content, a missing Installation heading, and missing summary text keep their current error or warning levels. Making README optional does not weaken validation for authors who add the file.
+Empty content, a missing Installation heading, and missing summary text keep their current error or warning levels. Making README optional does not weaken validation for authors who add the file. The guidance names the two present-file errors, directs correction and rerun, and uses `Skill is valid!` as the completion check.
 
 Alternative: remove README validation. This would accept documented but unusable installation guidance and exceeds the bug's scope.
 
@@ -36,11 +38,16 @@ A small `unittest` module will load the validator and validate fixture directori
 
 Alternative: add pytest. The repository does not already depend on it, and this change does not need its extra features.
 
+### Add static review evidence
+
+Store review evidence under `docs/pr-assets/align-skill-creator-readme-validation/`. Use a light, self-contained HTML page to explain the original mismatch, the optional-README correction, present-file recovery, validation flow, and chapter index. Capture desktop and narrow screenshots. Produce a short deterministic scroll recording because this is a static documentation walkthrough rather than an interactive product flow.
+
 ## Risks / Trade-offs
 
 - [Direct callers may have relied on a missing README error] → The documented contract already marks README optional, and tests lock the corrected behavior.
 - [Fixtures can drift from the published example] → The valid README fixture follows the summary plus Installation structure shown in `SKILL.md`.
 - [The script and tests both need PyYAML] → Both use PEP 723 with the same minimum dependency and run through `uv`.
+- [Rewritten Git history can invalidate evidence revision links] → Regenerate and revalidate the HTML, screenshots, video, reports, and hashes against the rebased source revision before delivery.
 
 ## Migration Plan
 

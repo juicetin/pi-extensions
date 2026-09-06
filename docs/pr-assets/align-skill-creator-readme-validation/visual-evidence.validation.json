@@ -1,0 +1,92 @@
+{
+  "status": "passed",
+  "sourceRevision": "3803871af2f3c0554ce3aa9a97ecfb6767a15941",
+  "opencvVersion": "4.10.0",
+  "tesseractVersion": "tesseract 5.5.0",
+  "ocrMethod": "OpenCV grayscale, 2x cubic upscale, Otsu threshold; Tesseract --oem 3 --psm 11",
+  "html": {
+    "path": "docs/pr-assets/align-skill-creator-readme-validation/change-breakdown.html",
+    "sizeBytes": 584332,
+    "selfContainedImageCount": 3,
+    "hasExternalStylesheet": false,
+    "hasAllSections": true,
+    "hasVideoLink": true,
+    "hasRevision": true,
+    "hasChapterLinks": true,
+    "hasStaleRevision": false,
+    "hasStaleRequiredReadmeClaim": false
+  },
+  "images": [
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/change-breakdown-desktop.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 150660,
+      "expectedText": [
+        "README stays optional",
+        "present-README errors",
+        "validator code changes"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "BREAKDOWN 1. Mismatch PR 26 BEAD PIEXT-4ZA CHANGE EVIDENCE 2. Guidance 3. Validation README stays optional, 4, Scope 5. Video with strict checks when 6. Screenshots present. The validator now accepts a valid skill with no README .md. When a README exists, it rejects empty content or a missing Installation heading. PR 26 adds exact recovery and completion guidance on top of that corrected contract. source revision 3803871af2f3ca0554ce3aa9a97ec fb6767a15941 1 2 0 guidance file amended in PR 26 present-README errors documented validator code changes in PR 26 O1 The validator used to reject a documented optional file. The file tree and step 4 allowed a minimal skill without README .md, but the old validator returned README.md not found. BEFORE CONFLICTING BEHAVIOR AFTER CONSISTENT CONTRACT \u201cREADME. md - Optional: human summary A missing README passes. A present README still + installation\u201d needs content and an Installation heading."
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/change-breakdown-narrow.png",
+      "width": 390,
+      "height": 844,
+      "sizeBytes": 59650,
+      "expectedText": [
+        "README",
+        "source revision",
+        "strict checks"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "1. Mismatch 2. Guidance 3. Validation 5. Vide 4, Scope PR 26 BEAD PIEXT-4ZA CHANGE EVIDENCE README stays optional, with strict checks when present. The validator now accepts a valid skill with no README .md. When a README exists, it rejects empty content or a missing Installation heading. PR 26 adds exact recovery and completion guidance on top of that corrected contract. source revision 3803871af2f300554ce3aa9a97ecfb6767a15941 1 guidance file amended in PR 26 2 present-README errors documented"
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/checkpoint-1-mismatch.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 140929,
+      "expectedText": [
+        "validator used to reject",
+        "README.md not found",
+        "Skill is valid"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "source revision 3893871afZ2f3casSsceszaagag7ec fh6767a15941 BREAKDOWN 1. Mismatch 2 . Guidance 1 2 0 5 guidance file amended in PR 2 present-README errors documented vaidator code cha {2 nPR 26 3 . Yaldation 4 . Scope 5 . Viceo . Screershats 01 The validator used to reject a documented optional file. The file tree and step 4 allowed a minimal skill without README .md. but the old validator returned README.md not found. BEFORE CONFLICTING BEHAVIOR AFTER CONSISTENT CONTRACT \u201cREADME.md - Optional: human summary A missing README passes. A present README still + installation\u201d needs content and an Installation heading. Documented: No README: README .md # Optional Skill is valid! Old validator: Present README errors: README .md not found README.md is empty README.md is missing an Installation section A documented minimal saill failed deterministic vacation, Five unit tests now cover absent, vad, emply. Incomplete and SUTIN Ary WAP Canes, O2 Recovery guidance preserves the optional contract. PR 26 keeps the file tree and step 4 optional. It adds the requirements for a present README and exact recovery at the validation step. REATNME ramainc antinnal"
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/checkpoint-2-guidance.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 145082,
+      "expectedText": [
+        "Recovery guidance",
+        "README remains optional",
+        "present-file errors"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "Documented: No README: README .md # Optional Skill is valid! BREAKDOWN Old validator: Present README errors: Mismatch README .md not found README.md is empty README.md is missing an Installation section Gvidance A documented muna sxill failed deterministic yaication, 3 Val.dation Five unit tents now cover absent, vaid, empty. incomplete. and summary-warnng Canes. Scope 5 Video Screenshots 02 Recovery guidance preserves the optional contract. PR 26 keeps the file tree and step 4 optional. It adds the requirements for a present README and exact recovery at the validation step. FILE TREE README remains optional A minimal Agent Skill still needs only SKILL. md. The bundled validator now accepts that structure. If included, add summary and Installation STEP 4 The optional README needs non-empty summary text followed by an #= Installation section. Recover from present-file errors STEP 8 Correct README.md is empty or README.md is missing an Installation section, then rerun until the validator prints Skill is valid!. 03. Five tests lock the validator contract. The suite covers no README, a valid README, empty content, a missing Installation heading, and a missing-summary warning. ExIT oO ExIT 1 ExIT 1"
+    },
+    {
+      "path": "docs/pr-assets/align-skill-creator-readme-validation/checkpoint-3-validation.png",
+      "width": 1440,
+      "height": 1000,
+      "sizeBytes": 136801,
+      "expectedText": [
+        "Five tests",
+        "README empty",
+        "Skill is valid"
+      ],
+      "missingExpectedText": [],
+      "foundForbiddenText": [],
+      "ocrText": "The optional README needs non-empty summary text followed by an #= Installation section. BREAKDOWN Mismatch Guidance Recover from present-file errors STEP 8 Correct README.md is empty or README.md is missing an Installation section, then rerun until the 3 Validation validator prints Skill is valid!. Scope 5 Video Screershats 03 Five tests lock the validator contract. The suite covers no README. a valid README, empty content, a missing Installation heading, and a missing-summary warning. EXIT oO EXIT 1 EXIT 1 README absent README empty Installation absent Skill is valid! REACKE md is empty REACME wd 1% missing an Installation section $ uv run extending-pi/skill-creator/tests/test_validate_skill. py Ran 5 tests OK $ python3 extending-pi/skill-creator/scripts/validate_skill.py extending-pi/skill-creator Skill is valid! $ openspec validate align-skill-creator-readme-validation -strict Change \u2018align-skill-creator-readme-validation' is valid O04 PR 26 stays additive after the rebase. PR 26 adds Already on main \u00ab Present-README recovery in extending-pi/skill- \u00a2 Optional-README validator behavior"
+    }
+  ],
+  "failures": []
+}

@@ -7,7 +7,8 @@ The skill-creator guidance documents `README.md` as optional, but its validator 
 - Accept an Agent Skill without `README.md` when its required `SKILL.md` is valid.
 - Keep the current README content checks when `README.md` exists, including the required Installation section.
 - Add deterministic fixtures and tests for the no-README case and the documented README case.
-- Clarify the validator documentation and record the behavior change.
+- Clarify the validator documentation, document recovery for present-README errors and the successful completion output, and record the behavior change.
+- Add reviewable HTML, screenshot, and video evidence that explains the optional-README correction and validation flow.
 
 ## Capabilities
 
@@ -22,6 +23,7 @@ None.
 ## Impact
 
 - Affected code: `extending-pi/skill-creator/scripts/validate_skill.py`.
-- Affected tests: new validator fixtures and standard-library unit tests under `extending-pi/skill-creator/tests/`.
+- Affected tests: validator fixtures and standard-library unit tests under `extending-pi/skill-creator/tests/`.
 - Affected documentation: skill-creator validation guidance and changelog.
-- No runtime API, dependency, package installation, or global skill copy changes.
+- New PR evidence under `docs/pr-assets/align-skill-creator-readme-validation/`.
+- No runtime API, dependency, package installation, deployment, publishing, or global skill copy changes.
